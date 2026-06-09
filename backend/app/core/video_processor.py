@@ -178,6 +178,8 @@ class VideoProcessor:
             )
             plate_count = 0
             job_cancelled = False
+            plate_interim_written_text: str = ""
+            plate_interim_written_conf: float = 0.0
 
             # Thread 1: Frame reader → fills frame_queue
             frame_queue: queue.Queue = queue.Queue(maxsize=64)
@@ -247,6 +249,28 @@ class VideoProcessor:
                                 crop_path,
                             )
                             if current_best:
+                                text_changed = current_best["text"] != plate_interim_written_text
+                                conf_improved = current_best["confidence"] > plate_interim_written_conf + 0.05
+                                if text_changed or conf_improved:
+                                    try:
+                                        upsert_plate_detection(
+                                            db,
+                                            source_type="video",
+                                            analysis_job_id=job_id,
+                                            video_filename=job.filename,
+                                            plate_text_raw=current_best["text"],
+                                            plate_text_normalized=current_best["text"],
+                                            is_valid_format=True,
+                                            confidence=current_best["confidence"],
+                                            ocr_confidence=current_best["confidence"],
+                                            detection_confidence=current_best["confidence"],
+                                            crop_path=current_best.get("crop_path"),
+                                            recognition_source="vote_buffer_interim",
+                                        )
+                                        plate_interim_written_text = current_best["text"]
+                                        plate_interim_written_conf = current_best["confidence"]
+                                    except Exception as exc:
+                                        logger.debug("Job %d plate interim write hatasi: %s", job_id, exc)
                                 broadcaster.broadcast(
                                     f"job:{job_id}",
                                     {
@@ -348,6 +372,19 @@ class VideoProcessor:
                         level in {"SUPHELI", "OLASI_KAVGA", "KAVGA"}
                         and smoothed >= self.settings.alarm_thresholds[level]
                     )
+                    if level in {"OLASI_KAVGA", "KAVGA"}:
+                        try:
+                            from app.services.notification_service import notification_service as _ns
+                            _ns.send_fight_alert(
+                                user_id=str(getattr(job, "user_id", None) or "all"),
+                                source_id=f"job_{job_id}",
+                                camera_name=job.filename or f"job_{job_id}",
+                                score=smoothed,
+                                level=level,
+                                timestamp=datetime.utcnow().isoformat(),
+                            )
+                        except Exception as _exc:
+                            logger.debug("Fight alert gonderilemedi: %s", _exc)
                     if (
                         self.settings.save_frame_level_events
                         and threshold_ok
@@ -405,12 +442,18 @@ class VideoProcessor:
                     pass
             reader_thread.join(timeout=5)
 
-            # Save vote-buffer winner as the single plate record for this job (no DB writes during analysis)
+            # Finalize plate record: exactly one record per job (highest-confidence winner)
             vote_winner: dict | None = None
             if plate_pipeline:
                 try:
                     vote_winner = plate_vote_buffer.get_final_winner(job_id, min_votes=1)
                     if vote_winner and vote_winner.get("text"):
+                        # Delete any interim records written with a different plate text
+                        db.query(LicensePlate).filter(
+                            LicensePlate.analysis_job_id == job_id,
+                            LicensePlate.plate_text_normalized != vote_winner["text"],
+                        ).delete(synchronize_session=False)
+                        db.commit()
                         upsert_plate_detection(
                             db,
                             source_type="video",
@@ -428,6 +471,12 @@ class VideoProcessor:
                         )
                         plate_count = vote_winner["seen_count"]
                         plate_pipeline.stats["plates_saved"] += 1
+                    else:
+                        # No winner found — clear any stale interim records
+                        db.query(LicensePlate).filter(
+                            LicensePlate.analysis_job_id == job_id
+                        ).delete(synchronize_session=False)
+                        db.commit()
                 except Exception as exc:
                     logger.warning("Job %d vote winner DB yazma hatasi: %s", job_id, exc)
                 finally:

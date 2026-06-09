@@ -178,6 +178,19 @@ class CameraStreamWorker:
                     pair_key = tuple(score_info.get("pair") or ("unknown",))
                     last_pair_event = last_event_by_pair.get(pair_key, -999999)
                     threshold_ok = level in {"OLASI_KAVGA", "KAVGA"} and smoothed >= self.settings.alarm_thresholds[level]
+                    if threshold_ok:
+                        try:
+                            from app.services.notification_service import notification_service as _ns
+                            _ns.send_fight_alert(
+                                user_id=str(getattr(camera, "user_id", None) or "all"),
+                                source_id=f"camera_{self.camera_id}",
+                                camera_name=camera_name or f"camera_{self.camera_id}",
+                                score=smoothed,
+                                level=level,
+                                timestamp=datetime.utcnow().isoformat(),
+                            )
+                        except Exception as _exc:
+                            logger.debug("Fight alert gonderilemedi: %s", _exc)
                     if self.settings.save_frame_level_events and threshold_ok and frame_index - last_pair_event > int(25 * self.settings.cooldown_seconds):
                         snapshot_path = self.settings.snapshot_dir / f"camera_{self.camera_id}_frame_{frame_index}.jpg"
                         cv2.imwrite(str(snapshot_path), annotated)

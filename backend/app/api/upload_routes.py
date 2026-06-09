@@ -122,6 +122,52 @@ def cancel_analysis(job_id: int, db: Session = Depends(get_db)):
     return ok({"job_id": job_id}, "Analiz durduruldu.")
 
 
+@router.delete("/events/{incident_id}")
+def delete_event(incident_id: int, db: Session = Depends(get_db)):
+    incident = db.get(Incident, incident_id)
+    if not incident:
+        raise HTTPException(status_code=404, detail="Olay bulunamadi.")
+    snapshot_path = getattr(incident, "best_snapshot_path", None)
+    if snapshot_path:
+        try:
+            Path(snapshot_path).unlink(missing_ok=True)
+        except Exception:
+            pass
+    db.delete(incident)
+    db.commit()
+    return ok(message="Olay silindi.")
+
+
+@router.delete("/jobs/{job_id}")
+def delete_job(job_id: int, db: Session = Depends(get_db)):
+    job = db.get(AnalysisJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Analiz isi bulunamadi.")
+    if job.status == "running":
+        raise HTTPException(status_code=400, detail="Devam eden analiz silinemez. Once durdurun.")
+    incidents = db.query(Incident).filter(Incident.analysis_job_id == job_id).all()
+    for inc in incidents:
+        snap = getattr(inc, "best_snapshot_path", None)
+        if snap:
+            try:
+                Path(snap).unlink(missing_ok=True)
+            except Exception:
+                pass
+    db.query(Incident).filter(Incident.analysis_job_id == job_id).delete(synchronize_session=False)
+    db.query(Event).filter(Event.analysis_job_id == job_id).delete(synchronize_session=False)
+    db.query(LicensePlate).filter(LicensePlate.analysis_job_id == job_id).delete(synchronize_session=False)
+    for attr in ("processed_path", "original_path"):
+        p = getattr(job, attr, None)
+        if p:
+            try:
+                Path(p).unlink(missing_ok=True)
+            except Exception:
+                pass
+    db.delete(job)
+    db.commit()
+    return ok(message="Analiz isi silindi.")
+
+
 @router.get("/jobs/{job_id}/incidents")
 def get_job_incidents(job_id: int, db: Session = Depends(get_db)):
     incidents = db.query(Incident).filter(Incident.analysis_job_id == job_id).order_by(Incident.created_at.desc()).all()

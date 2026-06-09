@@ -65,7 +65,7 @@ export default function EventDetailPage() {
               <ReferenceLine y={35} stroke="#eab308" strokeDasharray="4 4" />
               <ReferenceLine y={55} stroke="#f97316" strokeDasharray="4 4" />
               <ReferenceLine y={75} stroke="#ef4444" strokeDasharray="4 4" />
-              <Line type="monotone" dataKey="score" stroke="#22d3ee" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="score" stroke="#ffffff" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>

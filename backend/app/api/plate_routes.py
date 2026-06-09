@@ -139,7 +139,7 @@ def get_plate(plate_id: int, db: Session = Depends(get_db)):
     return ok(plate_payload(record))
 
 
-@router.delete("/{plate_id}", dependencies=[Depends(require_admin)])
+@router.delete("/{plate_id}", dependencies=[Depends(get_current_user)])
 def remove_plate(plate_id: int, db: Session = Depends(get_db)):
     record = db.get(LicensePlate, plate_id)
     if not record:

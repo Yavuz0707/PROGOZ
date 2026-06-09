@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Camera, Film, AlertTriangle, Clock, TrendingUp } from "lucide-react";
+import { Camera, Film, AlertTriangle, Clock, TrendingUp, Trash2 } from "lucide-react";
 import { api, assetUrl, unwrap } from "../api/client";
 import { SeverityBadge } from "../components/SeverityBadge";
 import type { Camera as CameraType, IncidentRecord } from "../types";
@@ -88,6 +88,9 @@ export default function EventsPage() {
   const [selectedKey, setSelectedKey] = useState<string>("__all__");
   const [sourceTab, setSourceTab] = useState<"video" | "camera">("video");
   const [severityFilter, setSeverityFilter] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     Promise.all([
@@ -98,6 +101,19 @@ export default function EventsPage() {
       setCameras(cams);
     }).catch(console.error).finally(() => setLoading(false));
   }, []);
+
+  async function handleDelete(id: number) {
+    setDeletingId(id);
+    try {
+      await api.delete(`/uploads/events/${id}`);
+      setIncidents((prev) => prev.filter((i) => i.id !== id));
+      setConfirmDeleteId(null);
+    } catch {
+      setErrorMsg("Olay silinemedi. Lütfen tekrar deneyin.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   const allSources = useMemo(() => buildSources(incidents, cameras), [incidents, cameras]);
   const videoSources = useMemo(() => allSources.filter((s) => s.type === "video"), [allSources]);
@@ -313,18 +329,61 @@ export default function EventsPage() {
                   </div>
                 </div>
 
-                {/* Detail Link */}
-                <Link
-                  to={`/events/${inc.id}`}
-                  className="shrink-0 self-center rounded-lg border border-line px-3 py-1.5 text-xs text-cyan-300 hover:bg-cyan-400/10 transition"
-                >
-                  Detay
-                </Link>
+                {/* Actions */}
+                <div className="shrink-0 self-center flex flex-col items-end gap-2">
+                  <Link
+                    to={`/events/${inc.id}`}
+                    className="rounded-lg border border-line px-3 py-1.5 text-xs text-cyan-300 hover:bg-cyan-400/10 transition"
+                  >
+                    Detay
+                  </Link>
+                  <button
+                    onClick={() => setConfirmDeleteId(inc.id)}
+                    className="rounded-lg p-1.5 text-slate-600 hover:text-red-400 hover:bg-red-400/10 transition"
+                    title="Olayı sil"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </div>
               </div>
             ))
           )}
         </div>
       </div>
+      {/* Confirm Delete Modal */}
+      {confirmDeleteId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-line bg-slate-900 p-6 shadow-2xl space-y-4">
+            <h3 className="text-lg font-semibold text-white">Olayı Sil</h3>
+            <p className="text-sm text-slate-400">Bu olayı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                disabled={deletingId !== null}
+                className="rounded-lg border border-line px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 transition disabled:opacity-50"
+              >
+                İptal
+              </button>
+              <button
+                onClick={() => handleDelete(confirmDeleteId)}
+                disabled={deletingId !== null}
+                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 transition disabled:opacity-50"
+              >
+                {deletingId !== null && <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+                Sil
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Toast */}
+      {errorMsg && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl border border-red-400/40 bg-slate-900 px-4 py-3 text-sm text-red-300 shadow-xl">
+          {errorMsg}
+          <button onClick={() => setErrorMsg("")} className="text-red-400 hover:text-red-200 transition">✕</button>
+        </div>
+      )}
     </section>
   );
 }

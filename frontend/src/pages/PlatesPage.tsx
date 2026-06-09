@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Camera, Film, Search, X, ChevronRight } from "lucide-react";
+import { Camera, Film, Search, X, ChevronRight, Trash2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { assetUrl } from "../api/client";
 import { cleanupUnreadablePlates, getPlates, getPlateStats } from "../api/plates";
@@ -156,6 +156,9 @@ export default function PlatesPage() {
   const [confidenceFilter, setConfidenceFilter] = useState<"" | "high" | "low">("");
   const [selectedPlate, setSelectedPlate] = useState<PlateRecord | null>(null);
   const [cleanupMsg, setCleanupMsg] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     Promise.all([
@@ -193,6 +196,35 @@ export default function PlatesPage() {
     if (confidenceFilter === "low") list = list.filter((p) => p.confidence < 0.5);
     return list.sort((a, b) => (b.last_seen_at || b.created_at).localeCompare(a.last_seen_at || a.created_at));
   }, [plates, selectedKey, search, confidenceFilter]);
+
+  // Deduplicate by plate text, keeping highest-confidence record per unique text
+  const displayedPlates = useMemo(() => {
+    const seen = new Map<string, PlateRecord>();
+    for (const p of filteredPlates) {
+      const key = (p.plate_text_normalized || p.plate_text_raw || "").toUpperCase();
+      const existing = seen.get(key);
+      if (!existing || p.confidence > existing.confidence) {
+        seen.set(key, p);
+      }
+    }
+    return [...seen.values()].sort(
+      (a, b) => (b.last_seen_at || b.created_at).localeCompare(a.last_seen_at || a.created_at)
+    );
+  }, [filteredPlates]);
+
+  async function handleDeletePlate(id: number) {
+    setDeletingId(id);
+    try {
+      await api.delete(`/plates/${id}`);
+      setPlates((prev) => prev.filter((p) => p.id !== id));
+      if (selectedPlate?.id === id) setSelectedPlate(null);
+      setConfirmDeleteId(null);
+    } catch {
+      setErrorMsg("Plaka silinemedi. Lütfen tekrar deneyin.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function handleCleanup() {
     try {
@@ -328,7 +360,7 @@ export default function PlatesPage() {
                 {f.label}
               </button>
             ))}
-            <span className="ml-auto self-center text-sm text-slate-500">{filteredPlates.length} plaka</span>
+            <span className="ml-auto self-center text-sm text-slate-500">{displayedPlates.length} plaka</span>
           </div>
 
           {/* Plate Cards */}
@@ -342,7 +374,7 @@ export default function PlatesPage() {
                 </div>
               ))}
             </div>
-          ) : filteredPlates.length === 0 ? (
+          ) : displayedPlates.length === 0 ? (
             <div className="rounded-xl border border-line bg-slate-900 p-10 text-center">
               <Search size={32} className="mx-auto mb-3 text-slate-600" />
               <p className="text-slate-400">Plaka bulunamadı</p>
@@ -350,16 +382,25 @@ export default function PlatesPage() {
             </div>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {filteredPlates.map((plate) => {
+              {displayedPlates.map((plate) => {
                 const sourceName = plate.source_type === "video"
                   ? (plate.video_filename || `Video #${plate.analysis_job_id}`)
                   : (cameras.find((c) => c.id === plate.camera_id)?.name || plate.camera_name || `Kamera #${plate.camera_id}`);
                 return (
-                  <button
+                  <div
                     key={plate.id}
                     onClick={() => setSelectedPlate(plate)}
-                    className="rounded-xl border border-line bg-slate-900 p-4 text-left hover:border-slate-600 hover:bg-slate-800/60 transition group"
+                    className="relative rounded-xl border border-line bg-slate-900 p-4 text-left hover:border-slate-600 hover:bg-slate-800/60 transition group cursor-pointer"
                   >
+                    {/* Delete Button */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(plate.id); }}
+                      className="absolute top-2 right-2 rounded-lg p-1.5 text-slate-700 hover:text-red-400 hover:bg-red-400/10 transition opacity-0 group-hover:opacity-100"
+                      title="Plakayı sil"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+
                     {/* Crop Image */}
                     {(plate.crop_url || plate.best_snapshot_url) && (
                       <div className="mb-3 h-12 rounded-lg overflow-hidden bg-slate-800">
@@ -372,11 +413,11 @@ export default function PlatesPage() {
                     )}
 
                     {/* Plate Text */}
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-2 pr-6">
                       <span className="font-mono text-base font-bold text-white tracking-widest">
                         {plate.plate_text_normalized || plate.plate_text_raw || "?"}
                       </span>
-                      <ChevronRight size={14} className="text-slate-600 group-hover:text-slate-400 transition" />
+                      <ChevronRight size={14} className="text-slate-600 group-hover:text-slate-400 transition shrink-0" />
                     </div>
 
                     {/* Confidence */}
@@ -399,7 +440,7 @@ export default function PlatesPage() {
                           : fmtDate(plate.first_seen_at)}
                       </p>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -410,6 +451,41 @@ export default function PlatesPage() {
       {/* Detail Modal */}
       {selectedPlate && (
         <PlateModal plate={selectedPlate} cameras={cameras} onClose={() => setSelectedPlate(null)} />
+      )}
+
+      {/* Confirm Delete Modal */}
+      {confirmDeleteId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl border border-line bg-slate-900 p-6 shadow-2xl space-y-4">
+            <h3 className="text-lg font-semibold text-white">Plaka Kaydını Sil</h3>
+            <p className="text-sm text-slate-400">Bu plaka kaydını silmek istediğinize emin misiniz? Bu işlem geri alınamaz.</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                disabled={deletingId !== null}
+                className="rounded-lg border border-line px-4 py-2 text-sm text-slate-300 hover:bg-slate-800 transition disabled:opacity-50"
+              >
+                İptal
+              </button>
+              <button
+                onClick={() => handleDeletePlate(confirmDeleteId)}
+                disabled={deletingId !== null}
+                className="flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 transition disabled:opacity-50"
+              >
+                {deletingId !== null && <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />}
+                Sil
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Toast */}
+      {errorMsg && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 rounded-xl border border-red-400/40 bg-slate-900 px-4 py-3 text-sm text-red-300 shadow-xl">
+          {errorMsg}
+          <button onClick={() => setErrorMsg("")} className="text-red-400 hover:text-red-200 transition">✕</button>
+        </div>
       )}
     </section>
   );

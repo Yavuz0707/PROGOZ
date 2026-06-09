@@ -1,13 +1,20 @@
-import clsx from "clsx";
+type ToneStyle = { background: string; color: string; borderColor: string };
 
-const tone: Record<string, string> = {
-  KAVGA: "bg-red-500/20 text-red-200 border-red-400/60",
-  OLASI_KAVGA: "bg-orange-500/20 text-orange-200 border-orange-400/60",
-  SUPHELI: "bg-yellow-500/20 text-yellow-100 border-yellow-400/60",
-  NORMAL: "bg-emerald-500/20 text-emerald-200 border-emerald-400/60"
+const tone: Record<string, ToneStyle> = {
+  KAVGA:       { background: "rgba(239,68,68,0.12)",  color: "#ef4444",  borderColor: "rgba(239,68,68,0.35)"  },
+  OLASI_KAVGA: { background: "rgba(245,158,11,0.12)", color: "#f59e0b",  borderColor: "rgba(245,158,11,0.3)"  },
+  SUPHELI:     { background: "rgba(136,136,136,0.1)", color: "#888888",  borderColor: "rgba(136,136,136,0.25)"},
+  NORMAL:      { background: "#141414",               color: "#555555",  borderColor: "#2a2a2a"               },
 };
 
 export function SeverityBadge({ value }: { value: string }) {
-  return <span className={clsx("rounded border px-2 py-1 text-xs font-semibold", tone[value] || tone.NORMAL)}>{value}</span>;
+  const style = tone[value] ?? tone.NORMAL;
+  return (
+    <span
+      className="rounded border px-2 py-1 text-xs font-semibold"
+      style={style}
+    >
+      {value}
+    </span>
+  );
 }
-

@@ -34,7 +34,7 @@ const SEVERITY_COLOR: Record<string, string> = {
   OLASI_KAVGA: "#f97316",
   ŞÜPHELİ: "#eab308",
   SUPHELI: "#eab308",
-  NORMAL: "#22d3ee",
+  NORMAL: "#888888",
 };
 
 function statusText(status?: string) {
@@ -371,22 +371,22 @@ export default function VideoUploadPage() {
                 <AreaChart data={chartData}>
                   <defs>
                     <linearGradient id="scoreGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#22d3ee" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#22d3ee" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#ffffff" stopOpacity={0.15} />
+                      <stop offset="95%" stopColor="#ffffff" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis dataKey="t" tickFormatter={(v: number) => `${v.toFixed(0)}s`} tick={{ fill: "#94a3b8", fontSize: 11 }} />
-                  <YAxis domain={[0, 100]} tick={{ fill: "#94a3b8", fontSize: 11 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1f1f1f" />
+                  <XAxis dataKey="t" tickFormatter={(v: number) => `${v.toFixed(0)}s`} tick={{ fill: "#444444", fontSize: 11 }} />
+                  <YAxis domain={[0, 100]} tick={{ fill: "#444444", fontSize: 11 }} />
                   <Tooltip
-                    contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8 }}
+                    contentStyle={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: 8 }}
                     labelFormatter={(v: number) => `${Number(v).toFixed(1)}s`}
                     formatter={(v: number) => [`${v.toFixed(1)}`, "Skor"]}
                   />
                   <Area
                     type="monotone"
                     dataKey="score"
-                    stroke="#22d3ee"
+                    stroke="#ffffff"
                     strokeWidth={2}
                     fill="url(#scoreGrad)"
                     dot={false}
@@ -479,7 +479,7 @@ export default function VideoUploadPage() {
       {/* Live Score Indicator */}
       {job && isRunning && scoreSeries.length > 0 && (() => {
         const last = scoreSeries[scoreSeries.length - 1];
-        const color = SEVERITY_COLOR[last.label] || "#22d3ee";
+        const color = SEVERITY_COLOR[last.label] || "#888888";
         return (
           <div
             className="panel p-4 flex items-center justify-between"

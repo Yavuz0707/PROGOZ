@@ -210,17 +210,17 @@ export default function DashboardPage() {
             {hourlyData.some((d) => d.kavga > 0 || d.supheli > 0) ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={hourlyData} barGap={2}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1f1f1f" vertical={false} />
                   <XAxis
                     dataKey="hour"
-                    tick={{ fill: "#64748b", fontSize: 10 }}
+                    tick={{ fill: "#444444", fontSize: 10 }}
                     tickFormatter={(v: string) => v.replace(":00", "")}
                     interval={3}
                   />
-                  <YAxis tick={{ fill: "#64748b", fontSize: 10 }} allowDecimals={false} />
+                  <YAxis tick={{ fill: "#444444", fontSize: 10 }} allowDecimals={false} />
                   <Tooltip
-                    contentStyle={{ background: "#0f172a", border: "1px solid #1e293b", borderRadius: 8, fontSize: 12 }}
-                    cursor={{ fill: "#1e293b" }}
+                    contentStyle={{ background: "#141414", border: "1px solid #2a2a2a", borderRadius: 8, fontSize: 12 }}
+                    cursor={{ fill: "#1a1a1a" }}
                   />
                   <Bar dataKey="kavga" name="Kavga/Olası" stackId="a" radius={[0, 0, 0, 0]}>
                     {hourlyData.map((_, i) => (

@@ -2,20 +2,43 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== Design Tokens ===== */
 :root {
   color-scheme: dark;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #071019;
+
+  --background:       #000000;
+  --surface:          #0f0f0f;
+  --card:             #141414;
+  --card-hover:       #1a1a1a;
+  --border:           #2a2a2a;
+  --border-light:     #1f1f1f;
+
+  --text-primary:     #ffffff;
+  --text-secondary:   #888888;
+  --text-muted:       #444444;
+
+  --accent:           #ffffff;
+  --accent-secondary: #cccccc;
+
+  --success:          #4ade80;
+  --warning:          #f59e0b;
+  --danger:           #ef4444;
+  --info:             #94a3b8;
+
+  --sidebar-bg:       #080808;
+  --sidebar-text:     #888888;
+  --sidebar-active:   #ffffff;
+  --sidebar-hover:    #141414;
 }
 
+/* ===== Global Reset ===== */
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    linear-gradient(180deg, rgba(9, 22, 34, 0.92), rgba(7, 16, 25, 1)),
-    radial-gradient(circle at 80% 0%, rgba(17, 94, 89, 0.16), transparent 32%);
-  color: #e5edf5;
+  background: #000000;
+  color: #ffffff;
 }
 
 button,
@@ -24,11 +47,300 @@ select {
   font: inherit;
 }
 
+/* Smooth micro-transitions on interactive elements */
+*, *::before, *::after {
+  transition: background-color 150ms ease,
+              border-color     150ms ease,
+              color            150ms ease;
+}
+
+/* ===== Utility Classes ===== */
 .focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-cyan-400/70 focus:ring-offset-2 focus:ring-offset-slate-950;
+  @apply focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-2 focus:ring-offset-black;
 }
 
 .panel {
-  @apply rounded-lg border border-line bg-panel shadow-xl shadow-black/20;
+  @apply rounded-lg border border-line bg-panel shadow-xl shadow-black/40;
 }
 
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar          { width: 4px; height: 4px; }
+::-webkit-scrollbar-track    { background: #0f0f0f; }
+::-webkit-scrollbar-thumb    { background: #2a2a2a; border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+
+/* ===== Animations ===== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeIn 300ms ease forwards; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+.pulse { animation: pulse 2s infinite; }
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, #141414 25%, #1f1f1f 50%, #141414 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* ===== Login / Splash Page ===== */
+@keyframes loginScrollLeft {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes loginScrollRight {
+  0%   { transform: translateX(-50%); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes loginFadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes loginSpinCW {
+  to { transform: rotate(360deg); }
+}
+
+.login-page {
+  position: fixed;
+  inset: 0;
+  background: #000000;
+  overflow: hidden;
+}
+
+/* ---- Splash ---- */
+.login-splash {
+  position: absolute;
+  inset: 0;
+  background: #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  overflow: hidden;
+}
+
+.login-scroll-container {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+  pointer-events: none;
+  gap: 0;
+}
+
+.login-scroll-row {
+  overflow: hidden;
+  line-height: 1;
+}
+
+.login-scroll-track-left {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: loginScrollLeft 28s linear infinite;
+}
+
+.login-scroll-track-right {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: loginScrollRight 28s linear infinite;
+}
+
+.login-scroll-text {
+  font-size: clamp(3.5rem, 7vw, 6.5rem);
+  font-weight: 900;
+  color: #1a1a1a;
+  letter-spacing: -0.02em;
+  user-select: none;
+  padding: 0 0.25em;
+}
+
+.login-splash-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  animation: loginFadeInUp 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.login-splash-label {
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+  color: #ffffff;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.login-start-button {
+  background: #ffffff;
+  color: #000000;
+  border: none;
+  padding: 0.875rem 2.75rem;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 100px;
+  cursor: pointer;
+  letter-spacing: 0.03em;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.login-start-button:hover {
+  transform: scale(1.05);
+  box-shadow: 0 8px 32px rgba(255, 255, 255, 0.18);
+}
+
+.login-start-button:active {
+  transform: scale(0.97);
+}
+
+.login-splash-sub {
+  font-size: 0.8125rem;
+  color: #444444;
+  margin: 0;
+  letter-spacing: 0.06em;
+}
+
+/* ---- Login Form ---- */
+.login-form-wrapper {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000000;
+  padding: 1rem;
+}
+
+.login-form {
+  width: 100%;
+  max-width: 400px;
+  background: #111111;
+  border: 1px solid #2a2a2a;
+  border-radius: 16px;
+  padding: 2rem;
+}
+
+.login-form-header {
+  margin-bottom: 2rem;
+}
+
+.login-form-title {
+  font-size: 1.875rem;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.18em;
+  margin: 0 0 0.375rem;
+}
+
+.login-form-subtitle {
+  font-size: 0.875rem;
+  color: #888888;
+  margin: 0;
+}
+
+.login-label {
+  display: block;
+  margin-bottom: 1rem;
+}
+
+.login-label-text {
+  display: block;
+  font-size: 0.8125rem;
+  color: #888888;
+  margin-bottom: 0.5rem;
+}
+
+.login-input {
+  width: 100%;
+  background: #000000;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  padding: 0.625rem 0.875rem;
+  color: #ffffff;
+  font-size: 0.9375rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box;
+}
+
+.login-input:focus {
+  border-color: #ffffff;
+}
+
+.login-input::placeholder {
+  color: #444444;
+}
+
+.login-error {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.28);
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  color: #fca5a5;
+  margin-bottom: 1rem;
+}
+
+.login-submit-button {
+  width: 100%;
+  background: #ffffff;
+  color: #000000;
+  border: none;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+
+.login-submit-button:hover:not(:disabled) {
+  transform: scale(1.02);
+  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.12);
+}
+
+.login-submit-button:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.login-submit-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.login-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2.5px solid rgba(0, 0, 0, 0.25);
+  border-top-color: #000000;
+  border-radius: 50%;
+  animation: loginSpinCW 0.7s linear infinite;
+}
+
+.login-version {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #333333;
+  margin: 1.25rem 0 0;
+}

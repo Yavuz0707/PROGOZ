@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api import auth_routes, camera_routes, event_routes, incident_routes, plate_routes, stream_routes, system_routes, upload_routes
+import app.services.notification_service as _notification_module
 from app.config import get_settings
 from app.database import init_db
 from app.schemas.common import fail
@@ -19,8 +20,13 @@ plate_cleanup_scheduler = None
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
+    allow_origins=[
+        *settings.cors_origins,
+        "http://localhost:59729",
+        "http://localhost",
+        "*",
+    ],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -56,6 +62,14 @@ def on_startup() -> None:
             logger.warning("CUDA pasif: CPU fallback kullanilacak. torch=%s", torch.__version__)
     except Exception as exc:
         logger.warning("Torch/CUDA durumu okunamadi: %s", exc)
+    try:
+        _svc = _notification_module.notification_service
+        if _svc.enabled:
+            logger.warning("Firebase FCM aktif: bildirimler gonderilecek.")
+        else:
+            logger.warning("Firebase FCM devre disi: bildirimler gonderilmeyecek.")
+    except Exception as exc:
+        logger.warning("Notification service durumu okunamadi: %s", exc)
     try:
         from app.core.plate_detector import get_plate_detector
 
@@ -100,4 +114,5 @@ app.include_router(event_routes.router, prefix=settings.api_prefix)
 app.include_router(incident_routes.router, prefix=settings.api_prefix)
 app.include_router(plate_routes.router, prefix=settings.api_prefix)
 app.include_router(system_routes.router, prefix=settings.api_prefix)
+app.include_router(_notification_module.router, prefix=settings.api_prefix)
 app.include_router(stream_routes.router)
