@@ -1,4 +1,5 @@
 import platform
+import shutil
 import sys
 
 
@@ -33,6 +34,8 @@ def main() -> None:
         print(f"OpenCV version: {cv2.__version__}")
     except Exception as exc:
         print(f"OpenCV import error: {exc}")
+
+    print(f"FFmpeg: {'OK' if shutil.which('ffmpeg') else 'NOT FOUND'}")
 
     print(f"Selected device: {selected_device}")
 

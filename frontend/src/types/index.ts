@@ -20,6 +20,8 @@ export type Camera = {
   rtsp_url?: string;
   location?: string;
   enabled: boolean;
+  plate_recognition_enabled: boolean;
+  plate_frame_interval: number;
   created_at: string;
   updated_at: string;
 };
@@ -81,6 +83,48 @@ export type AnalysisJob = {
   processed_url?: string;
   original_url?: string;
   error_message?: string;
+  plate_recognition_enabled?: number;
+  plate_count?: number;
+};
+
+export type PlateRecord = {
+  id: number;
+  source_type: "video" | "camera";
+  camera_id?: number;
+  camera_name?: string;
+  analysis_job_id?: number;
+  video_filename?: string;
+  plate_text_raw: string;
+  plate_text_normalized: string;
+  is_valid_format: boolean;
+  confidence: number;
+  ocr_confidence: number;
+  detection_confidence: number;
+  first_seen_at?: string;
+  last_seen_at?: string;
+  first_seen_time_seconds?: number;
+  last_seen_time_seconds?: number;
+  frame_index?: number;
+  seen_count: number;
+  best_snapshot_url?: string;
+  crop_url?: string;
+  bbox_json?: string;
+  status: "valid" | "uncertain" | "ignored";
+  recognition_source?: string;
+  details_json?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlateStats = {
+  total: number;
+  today: number;
+  by_source: Record<string, number>;
+  by_camera: Record<string, number>;
+  by_video: Record<string, number>;
+  valid: number;
+  uncertain: number;
+  unreadable: number;
 };
 
 export type SystemStatus = {

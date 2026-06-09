@@ -10,6 +10,9 @@ backend/logs/
 backend/venv/
 backend/progoz.db
 backend/*.db
+backend/ml/datasets/**/*
+!backend/ml/datasets/**/.gitkeep
+backend/ml/runs/
 backend/app/static/uploads/*
 backend/app/static/processed/*
 backend/app/static/snapshots/*

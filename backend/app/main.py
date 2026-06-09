@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import auth_routes, camera_routes, event_routes, incident_routes, stream_routes, system_routes, upload_routes
+from app.api import auth_routes, camera_routes, event_routes, incident_routes, plate_routes, stream_routes, system_routes, upload_routes
 from app.config import get_settings
 from app.database import init_db
 from app.schemas.common import fail
@@ -15,6 +15,7 @@ from app.schemas.common import fail
 settings = get_settings()
 logger = logging.getLogger("progoz.startup")
 app = FastAPI(title=settings.app_name, version="0.1.0")
+plate_cleanup_scheduler = None
 
 app.add_middleware(
     CORSMiddleware,
@@ -29,8 +30,23 @@ app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
 
 @app.on_event("startup")
 def on_startup() -> None:
+    global plate_cleanup_scheduler
     settings.ensure_directories()
     init_db()
+    try:
+        from app.services.plate_service import run_deduplicate_once_global
+
+        deleted = run_deduplicate_once_global()
+        if deleted > 0:
+            logger.warning("Baslangicta %d yinelenen plaka kaydi temizlendi.", deleted)
+    except Exception as exc:
+        logger.warning("Baslangic deduplication hatasi: %s", exc)
+    try:
+        from app.services.plate_service import start_plate_cleanup_scheduler
+
+        plate_cleanup_scheduler = start_plate_cleanup_scheduler()
+    except Exception as exc:
+        logger.warning("Plaka cleanup scheduler baslatilamadi: %s", exc)
     try:
         import torch
 
@@ -40,6 +56,21 @@ def on_startup() -> None:
             logger.warning("CUDA pasif: CPU fallback kullanilacak. torch=%s", torch.__version__)
     except Exception as exc:
         logger.warning("Torch/CUDA durumu okunamadi: %s", exc)
+    try:
+        from app.core.plate_detector import get_plate_detector
+
+        detector = get_plate_detector()
+        logger.warning(
+            "Plaka detector durumu: enabled=%s path=%s exists=%s loaded=%s device=%s error=%s",
+            settings.plate_recognition_enabled,
+            detector.model_path,
+            detector.model_exists,
+            detector.available,
+            detector.device_label,
+            detector.load_error,
+        )
+    except Exception as exc:
+        logger.warning("Plaka detector durumu okunamadi: %s", exc)
 
 
 @app.exception_handler(RequestValidationError)
@@ -67,5 +98,6 @@ app.include_router(camera_routes.router, prefix=settings.api_prefix)
 app.include_router(upload_routes.router, prefix=settings.api_prefix)
 app.include_router(event_routes.router, prefix=settings.api_prefix)
 app.include_router(incident_routes.router, prefix=settings.api_prefix)
+app.include_router(plate_routes.router, prefix=settings.api_prefix)
 app.include_router(system_routes.router, prefix=settings.api_prefix)
 app.include_router(stream_routes.router)

@@ -28,6 +28,9 @@ class Settings:
     processed_dir: Path = static_dir / "processed"
     snapshot_dir: Path = static_dir / "snapshots"
     clip_dir: Path = static_dir / "clips"
+    plate_snapshot_dir: Path = static_dir / "plates"
+    plate_crop_dir: Path = static_dir / "plate_crops"
+    plate_debug_dir: Path = static_dir / "plate_debug"
     yolo_model: str = os.getenv("YOLO_MODEL", "yolov8n-pose.pt")
     confidence_threshold: float = float(os.getenv("CONFIDENCE_THRESHOLD", "0.35"))
     frame_skip: int = int(os.getenv("FRAME_SKIP", "2"))
@@ -96,10 +99,15 @@ class Settings:
     single_sided_motion_penalty_factor: float = float(os.getenv("SINGLE_SIDED_MOTION_PENALTY_FACTOR", "0.45"))
     use_pose_contact_cues: bool = os.getenv("USE_POSE_CONTACT_CUES", "true").lower() in {"1", "true", "yes", "on"}
     use_group_interaction_scoring: bool = os.getenv("USE_GROUP_INTERACTION_SCORING", "true").lower() in {"1", "true", "yes", "on"}
-    use_violence_classifier: bool = os.getenv("USE_VIOLENCE_CLASSIFIER", "false").lower() in {"1", "true", "yes", "on"}
-    classifier_model_path: str = os.getenv("CLASSIFIER_MODEL_PATH", "")
-    classifier_input_frames: int = int(os.getenv("CLASSIFIER_INPUT_FRAMES", "16"))
-    classifier_stride: int = int(os.getenv("CLASSIFIER_STRIDE", "4"))
+    fight_classifier_enabled: bool = os.getenv("FIGHT_CLASSIFIER_ENABLED", os.getenv("USE_VIOLENCE_CLASSIFIER", "false")).lower() in {"1", "true", "yes", "on"}
+    fight_classifier_model_path: str = os.getenv("FIGHT_CLASSIFIER_MODEL_PATH", os.getenv("CLASSIFIER_MODEL_PATH", "ml/models/fight/fight_classifier.pt"))
+    fight_classifier_clip_len: int = int(os.getenv("FIGHT_CLASSIFIER_CLIP_LEN", os.getenv("CLASSIFIER_INPUT_FRAMES", "16")))
+    fight_classifier_frame_size: int = int(os.getenv("FIGHT_CLASSIFIER_FRAME_SIZE", "224"))
+    fight_classifier_interval: int = int(os.getenv("FIGHT_CLASSIFIER_INTERVAL", os.getenv("CLASSIFIER_STRIDE", "5")))
+    use_violence_classifier: bool = fight_classifier_enabled
+    classifier_model_path: str = fight_classifier_model_path
+    classifier_input_frames: int = fight_classifier_clip_len
+    classifier_stride: int = fight_classifier_interval
     contact_persistence_min_frames: int = int(os.getenv("CONTACT_PERSISTENCE_MIN_FRAMES", "3"))
     neck_proximity_threshold: float = float(os.getenv("NECK_PROXIMITY_THRESHOLD", "0.18"))
     upper_body_contact_threshold: float = float(os.getenv("UPPER_BODY_CONTACT_THRESHOLD", "0.10"))
@@ -124,6 +132,33 @@ class Settings:
     overlay_banner_height_ratio: float = float(os.getenv("OVERLAY_BANNER_HEIGHT_RATIO", "0.055"))
     overlay_padding: int = int(os.getenv("OVERLAY_PADDING", "8"))
     overlay_compact_mode: bool = os.getenv("OVERLAY_COMPACT_MODE", "true").lower() in {"1", "true", "yes", "on"}
+    plate_recognition_enabled: bool = os.getenv("PLATE_RECOGNITION_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+    plate_detector_model_path: str = os.getenv("PLATE_DETECTOR_MODEL_PATH", "ml/models/plates/license_plate_detector.pt")
+    plate_detector_imgsz: int = int(os.getenv("PLATE_DETECTOR_IMGSZ", "640"))
+    plate_detector_confidence: float = float(os.getenv("PLATE_DETECTOR_CONFIDENCE", "0.25"))
+    plate_ocr_engine: str = os.getenv("PLATE_OCR_ENGINE", "easyocr").lower()
+    plate_ocr_languages: list[str] = [
+        lang.strip()
+        for lang in os.getenv("PLATE_OCR_LANGUAGES", "en").split(",")
+        if lang.strip()
+    ]
+    plate_ocr_min_confidence: float = float(os.getenv("PLATE_OCR_MIN_CONFIDENCE", "0.30"))
+    plate_save_uncertain: bool = os.getenv("PLATE_SAVE_UNCERTAIN", "true").lower() in {"1", "true", "yes", "on"}
+    plate_save_unreadable: bool = os.getenv("PLATE_SAVE_UNREADABLE", "false").lower() in {"1", "true", "yes", "on"}
+    plate_show_unreadable_in_default_list: bool = os.getenv("PLATE_SHOW_UNREADABLE_IN_DEFAULT_LIST", "false").lower() in {"1", "true", "yes", "on"}
+    plate_min_text_length_to_save: int = int(os.getenv("PLATE_MIN_TEXT_LENGTH_TO_SAVE", "5"))
+    plate_require_valid_format_for_default: bool = os.getenv("PLATE_REQUIRE_VALID_FORMAT_FOR_DEFAULT", "false").lower() in {"1", "true", "yes", "on"}
+    plate_test_image_auth_required: bool = os.getenv("PLATE_TEST_IMAGE_AUTH_REQUIRED", "false").lower() in {"1", "true", "yes", "on"}
+    plate_debug_enabled: bool = os.getenv("PLATE_DEBUG_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
+    plate_frame_interval_fast: int = int(os.getenv("PLATE_FRAME_INTERVAL_FAST", "5"))
+    plate_frame_interval_balanced: int = int(os.getenv("PLATE_FRAME_INTERVAL_BALANCED", "3"))
+    plate_frame_interval_accurate: int = int(os.getenv("PLATE_FRAME_INTERVAL_ACCURATE", "1"))
+    plate_dedup_window_seconds: int = int(os.getenv("PLATE_DEDUP_WINDOW_SECONDS", "30"))
+    plate_retention_days: int = int(os.getenv("PLATE_RETENTION_DAYS", "7"))
+    plate_save_snapshots: bool = os.getenv("PLATE_SAVE_SNAPSHOTS", "true").lower() in {"1", "true", "yes", "on"}
+    plate_save_crops: bool = os.getenv("PLATE_SAVE_CROPS", "true").lower() in {"1", "true", "yes", "on"}
+    plate_cleanup_on_startup: bool = os.getenv("PLATE_CLEANUP_ON_STARTUP", "true").lower() in {"1", "true", "yes", "on"}
+    plate_regex_country: str = os.getenv("PLATE_REGEX_COUNTRY", "TR")
     allowed_video_extensions = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 
     def analysis_profile(self, mode: str | None = None) -> dict:
@@ -138,8 +173,18 @@ class Settings:
         profile.setdefault("output_fps", 0)
         return profile
 
+    def plate_frame_interval(self, mode: str | None = None) -> int:
+        selected = (mode or self.analysis_mode or "fast").lower()
+        intervals = {
+            "fast": self.plate_frame_interval_fast,
+            "balanced": self.plate_frame_interval_balanced,
+            "accurate": self.plate_frame_interval_accurate,
+            "realtime": self.plate_frame_interval_balanced,
+        }
+        return max(1, int(intervals.get(selected, self.plate_frame_interval_balanced)))
+
     def ensure_directories(self) -> None:
-        for path in [self.upload_dir, self.processed_dir, self.snapshot_dir, self.clip_dir, BASE_DIR / "logs"]:
+        for path in [self.upload_dir, self.processed_dir, self.snapshot_dir, self.clip_dir, self.plate_snapshot_dir, self.plate_crop_dir, self.plate_debug_dir, BASE_DIR / "logs"]:
             path.mkdir(parents=True, exist_ok=True)
 
 

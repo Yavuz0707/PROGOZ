@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+import cv2
+from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -27,6 +28,34 @@ def create_camera(payload: CameraCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(camera)
     return ok(CameraRead.model_validate(camera).model_dump(mode="json"), "Kamera eklendi.")
+
+
+@router.get("/devices")
+def list_devices():
+    devices = []
+    for i in range(5):
+        try:
+            cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
+            if cap.isOpened():
+                ret, _ = cap.read()
+                if ret:
+                    devices.append({"id": i, "name": f"Webcam ({i})", "type": "webcam"})
+            cap.release()
+        except Exception:
+            continue
+    return ok(devices)
+
+
+@router.post("/webcam/start")
+def start_webcam(device_id: int = Body(..., embed=True)):
+    camera_runtime.start(device_id, device_id)
+    return ok({"running": True, "camera_id": device_id}, "Webcam baslatildi.")
+
+
+@router.post("/webcam/stop")
+def stop_webcam(device_id: int = Body(..., embed=True)):
+    camera_runtime.stop(device_id)
+    return ok({"running": False}, "Webcam durduruldu.")
 
 
 @router.get("/{camera_id}")

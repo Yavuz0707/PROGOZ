@@ -6,6 +6,7 @@ import EventDetailPage from "./pages/EventDetailPage";
 import EventsPage from "./pages/EventsPage";
 import LiveCameraPage from "./pages/LiveCameraPage";
 import LoginPage from "./pages/LoginPage";
+import PlatesPage from "./pages/PlatesPage";
 import SettingsPage from "./pages/SettingsPage";
 import VideoUploadPage from "./pages/VideoUploadPage";
 
@@ -23,10 +24,10 @@ export default function App() {
         <Route path="/upload" element={<VideoUploadPage />} />
         <Route path="/events" element={<EventsPage />} />
         <Route path="/events/:id" element={<EventDetailPage />} />
+        <Route path="/plates" element={<PlatesPage />} />
         <Route path="/cameras" element={<CamerasPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
     </Routes>
   );
 }
-

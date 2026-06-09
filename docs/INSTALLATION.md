@@ -9,8 +9,7 @@ python -m venv venv
 python -m pip install --upgrade pip
 pip install -r requirements.txt
 python scripts/check_cuda.py
-cd ..
-python scripts/create_admin.py
+uvicorn app.main:app --reload
 ```
 
 Alternatif kolay kurulum:
@@ -28,6 +27,14 @@ FastAPI import uyarilari gorurseniz VS Code yanlis Python ortamını kullaniyor 
 2. `Python: Select Interpreter`
 3. `backend\venv\Scripts\python.exe` secin
 4. VS Code penceresini gerekirse yeniden yukleyin
+
+Repo kokunden acilan VS Code icin `.vscode/settings.json` `${workspaceFolder}/backend/venv/Scripts/python.exe` yolunu kullanir. Workspace'i `backend` klasorunden acarsaniz bu yol degisecegi icin interpreter secimini manuel yapin.
+
+Ilk admin kullanicisini proje kok dizininden olusturmak icin:
+
+```powershell
+python scripts/create_admin.py
+```
 
 ## CUDA
 
@@ -81,3 +88,13 @@ Varsayilan mod `fast`tir. Video demo icin onerilir.
 - `accurate`: en detayli ama daha yavas analiz.
 
 Video Analiz sayfasinda mod, islenmis video uretimi ve debug log secenekleri bulunur. `Hizli sonuc modu` islenmis video yazmayi atlayarak yalniz event/snapshot/skor uretir.
+
+## Plaka Tanima Kurulumu
+
+Plaka OCR icin `easyocr`, `pillow`, `imutils` ve `rapidfuzz` requirements icindedir. Detector varsayilan olarak su dosyayi arar:
+
+```text
+backend\models\license_plate_detector.pt
+```
+
+Hazir modeliniz yoksa uygulama hata vermez, sadece plaka kaydi uretmez. Kendi modelinizi egitmek ve baglamak icin `docs/PLATE_RECOGNITION.md` dosyasina bakin.

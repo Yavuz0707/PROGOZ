@@ -1,4 +1,4 @@
-import { Camera, Gauge, LayoutDashboard, LogOut, Settings, Upload, Video } from "lucide-react";
+import { Camera, Gauge, LayoutDashboard, LogOut, Settings, Upload, Video, RectangleEllipsis } from "lucide-react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 
 const nav = [
@@ -6,6 +6,7 @@ const nav = [
   { to: "/live", label: "Canli Kamera", icon: Video },
   { to: "/upload", label: "Video Analiz", icon: Upload },
   { to: "/events", label: "Olaylar", icon: Gauge },
+  { to: "/plates", label: "Plakalar", icon: RectangleEllipsis },
   { to: "/cameras", label: "Kameralar", icon: Camera },
   { to: "/settings", label: "Ayarlar", icon: Settings }
 ];
@@ -53,4 +54,3 @@ export function Layout() {
     </div>
   );
 }
-

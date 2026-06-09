@@ -22,9 +22,11 @@ class AnalysisJob(Base):
     analysis_mode = Column(String(40), default="fast", nullable=False)
     save_processed_video = Column(Integer, default=1, nullable=False)
     debug_scoring = Column(Integer, default=0, nullable=False)
+    plate_recognition_enabled = Column(Integer, default=1, nullable=False)
     performance_json = Column(Text, nullable=True)
     started_at = Column(DateTime, nullable=True)
     finished_at = Column(DateTime, nullable=True)
     error_message = Column(Text, nullable=True)
 
     events = relationship("Event", back_populates="analysis_job")
+    plates = relationship("LicensePlate", back_populates="analysis_job")

@@ -18,6 +18,7 @@ class AnalysisJobRead(BaseModel):
     analysis_mode: str = "fast"
     save_processed_video: int = 1
     debug_scoring: int = 0
+    plate_recognition_enabled: int = 1
     performance_json: Optional[str] = None
     started_at: Optional[datetime]
     finished_at: Optional[datetime]

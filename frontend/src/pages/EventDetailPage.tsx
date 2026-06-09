@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { api, unwrap } from "../api/client";
+import { api, assetUrl, unwrap } from "../api/client";
 import { SeverityBadge } from "../components/SeverityBadge";
 import type { IncidentRecord } from "../types";
 
@@ -42,7 +42,7 @@ export default function EventDetailPage() {
         </div>
       </div>
       <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
-        <div className="panel overflow-hidden">{incident.best_snapshot_url ? <img src={incident.best_snapshot_url} className="w-full object-contain" /> : <div className="p-6 text-slate-400">Snapshot yok</div>}</div>
+        <div className="panel overflow-hidden">{incident.best_snapshot_url ? <img src={assetUrl(incident.best_snapshot_url)} className="w-full object-contain" /> : <div className="p-6 text-slate-400">Snapshot yok</div>}</div>
         <div className="panel p-4">
           <dl className="space-y-3 text-sm">
             <div><dt className="text-slate-400">Kaynak</dt><dd>{incident.source_type === "video" ? incident.video_filename : `Kamera #${incident.camera_id}`}</dd></div>

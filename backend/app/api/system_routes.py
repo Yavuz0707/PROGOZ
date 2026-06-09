@@ -1,8 +1,9 @@
 import platform
+from pathlib import Path
 
 from fastapi import APIRouter, Depends
 
-from app.config import get_settings
+from app.config import BASE_DIR, get_settings
 from app.schemas.common import ok
 from app.services.auth_service import get_current_user
 from app.utils.ffmpeg_utils import ffmpeg_available
@@ -42,6 +43,9 @@ def system_status():
         ultralytics_available = False
         ultralytics_version = None
     profile = settings.analysis_profile()
+    plate_model_path = Path(settings.plate_detector_model_path)
+    if not plate_model_path.is_absolute():
+        plate_model_path = BASE_DIR / plate_model_path
     return ok(
         {
             "backend_status": "ok",
@@ -89,6 +93,11 @@ def system_status():
             "classifier_model_path": settings.classifier_model_path,
             "classifier_input_frames": settings.classifier_input_frames,
             "classifier_stride": settings.classifier_stride,
+            "fight_classifier_enabled": settings.fight_classifier_enabled,
+            "fight_classifier_model_path": settings.fight_classifier_model_path,
+            "fight_classifier_clip_len": settings.fight_classifier_clip_len,
+            "fight_classifier_frame_size": settings.fight_classifier_frame_size,
+            "fight_classifier_interval": settings.fight_classifier_interval,
             "contact_persistence_min_frames": settings.contact_persistence_min_frames,
             "neck_proximity_threshold": settings.neck_proximity_threshold,
             "high_overlap_contact_threshold": settings.high_overlap_contact_threshold,
@@ -103,5 +112,25 @@ def system_status():
             "overlay_banner_height_ratio": settings.overlay_banner_height_ratio,
             "overlay_padding": settings.overlay_padding,
             "overlay_compact_mode": settings.overlay_compact_mode,
+            "plate_recognition_enabled": settings.plate_recognition_enabled,
+            "plate_detector_model_path": settings.plate_detector_model_path,
+            "plate_detector_resolved_model_path": str(plate_model_path),
+            "plate_detector_model_exists": plate_model_path.exists(),
+            "plate_detector_imgsz": settings.plate_detector_imgsz,
+            "plate_detector_confidence": settings.plate_detector_confidence,
+            "plate_ocr_engine": settings.plate_ocr_engine,
+            "plate_ocr_min_confidence": settings.plate_ocr_min_confidence,
+            "plate_save_uncertain": settings.plate_save_uncertain,
+            "plate_save_unreadable": settings.plate_save_unreadable,
+            "plate_show_unreadable_in_default_list": settings.plate_show_unreadable_in_default_list,
+            "plate_min_text_length_to_save": settings.plate_min_text_length_to_save,
+            "plate_require_valid_format_for_default": settings.plate_require_valid_format_for_default,
+            "plate_test_image_auth_required": settings.plate_test_image_auth_required,
+            "plate_debug_enabled": settings.plate_debug_enabled,
+            "plate_frame_interval_fast": settings.plate_frame_interval_fast,
+            "plate_frame_interval_balanced": settings.plate_frame_interval_balanced,
+            "plate_frame_interval_accurate": settings.plate_frame_interval_accurate,
+            "plate_dedup_window_seconds": settings.plate_dedup_window_seconds,
+            "plate_retention_days": settings.plate_retention_days,
         }
     )
