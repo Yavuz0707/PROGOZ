@@ -25,3 +25,20 @@ backend/app/static/clips/*
 !backend/app/static/clips/.gitkeep
 frontend/node_modules/
 frontend/dist/
+
+# Flutter / Mobile
+progoz_mobile/.dart_tool/
+progoz_mobile/.idea/
+progoz_mobile/build/
+progoz_mobile/.flutter-plugins
+progoz_mobile/.flutter-plugins-dependencies
+progoz_mobile/android/.gradle/
+progoz_mobile/android/app/build/
+progoz_mobile/android/local.properties
+progoz_mobile/ios/Pods/
+progoz_mobile/ios/.symlinks/
+progoz_mobile/*.iml
+
+# Firebase / Hassas Dosyalar
+progoz_mobile/android/app/google-services.json
+progoz_mobile/ios/Runner/GoogleService-Info.plist

@@ -1,0 +1,36 @@
+{
+  "_comment": "Bu dosya Firebase Console'dan indirilerek bu konuma yerleştirilmelidir.",
+  "_instructions": [
+    "1. Firebase Console'a gidin: https://console.firebase.google.com/",
+    "2. PROGÖZ projesini seçin",
+    "3. Proje Ayarları > Android uygulamanızı seçin",
+    "4. 'google-services.json' dosyasını indirin",
+    "5. İndirilen dosyayı bu klasöre (android/app/) kopyalayın ve '.example' uzantısını kaldırın"
+  ],
+  "project_info": {
+    "project_number": "BURAYA_PROJECT_NUMBER",
+    "project_id": "BURAYA_PROJECT_ID",
+    "storage_bucket": "BURAYA_PROJECT_ID.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "BURAYA_APP_ID",
+        "android_client_info": {
+          "package_name": "com.example.progoz_mobile"
+        }
+      },
+      "api_key": [
+        {
+          "current_key": "BURAYA_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
