@@ -3,6 +3,8 @@ __pycache__/
 .pytest_cache/
 .env
 *.pt
+!backend/ml/models/fight/fight_classifier.pt
+!backend/ml/models/plates/license_plate_detector.pt
 *.onnx
 *.engine
 logs/
