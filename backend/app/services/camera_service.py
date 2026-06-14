@@ -1,6 +1,9 @@
+import logging
 from typing import Dict
 
 from app.core.camera_stream import CameraStreamWorker
+
+logger = logging.getLogger("progoz.camera_service")
 
 
 class CameraRuntimeRegistry:
@@ -8,7 +11,8 @@ class CameraRuntimeRegistry:
         self._workers: Dict[int, CameraStreamWorker] = {}
 
     def start(self, camera_id: int, source: str | int) -> bool:
-        if camera_id in self._workers and self._workers[camera_id].running:
+        existing = self._workers.get(camera_id)
+        if existing and existing.running and existing.thread and existing.thread.is_alive():
             return True
         worker = CameraStreamWorker(camera_id=camera_id, source=source)
         worker.start()
@@ -28,8 +32,10 @@ class CameraRuntimeRegistry:
 
     def is_running(self, camera_id: int) -> bool:
         worker = self._workers.get(camera_id)
-        return bool(worker and worker.running)
+        if not worker:
+            return False
+        # Also verify thread is alive — running flag can stay True if thread crashes
+        return worker.running and bool(worker.thread and worker.thread.is_alive())
 
 
 camera_runtime = CameraRuntimeRegistry()
-

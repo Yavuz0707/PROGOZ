@@ -9,6 +9,7 @@ import LoginPage from "./pages/LoginPage";
 import PlatesPage from "./pages/PlatesPage";
 import SettingsPage from "./pages/SettingsPage";
 import VideoUploadPage from "./pages/VideoUploadPage";
+import WebStreamPage from "./pages/WebStreamPage";
 
 function Protected() {
   return localStorage.getItem("progoz_token") ? <Layout /> : <Navigate to="/login" replace />;
@@ -25,6 +26,7 @@ export default function App() {
         <Route path="/events" element={<EventsPage />} />
         <Route path="/events/:id" element={<EventDetailPage />} />
         <Route path="/plates" element={<PlatesPage />} />
+        <Route path="/web-stream" element={<WebStreamPage />} />
         <Route path="/cameras" element={<CamerasPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

@@ -16,7 +16,7 @@ export type User = {
 export type Camera = {
   id: number;
   name: string;
-  source_type: "rtsp" | "webcam" | "file";
+  source_type: "rtsp" | "webcam" | "file" | "web";
   rtsp_url?: string;
   location?: string;
   enabled: boolean;

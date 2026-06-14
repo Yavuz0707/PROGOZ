@@ -42,3 +42,9 @@ progoz_mobile/*.iml
 # Firebase / Hassas Dosyalar
 progoz_mobile/android/app/google-services.json
 progoz_mobile/ios/Runner/GoogleService-Info.plist
+backend/*adminsdk*.json
+
+# Log dosyaları
+*_log.txt
+*_err.txt
+backend/..backend_log.txt

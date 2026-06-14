@@ -94,7 +94,18 @@ def start_camera(camera_id: int, db: Session = Depends(get_db)):
     camera = db.get(Camera, camera_id)
     if not camera:
         raise HTTPException(status_code=404, detail="Kamera bulunamadi.")
-    source = 0 if camera.source_type == "webcam" else camera.rtsp_url
+    if camera.source_type == "webcam":
+        source: str | int = 0
+    elif camera.source_type == "web":
+        if not camera.rtsp_url:
+            raise HTTPException(status_code=400, detail="Web yayin URL'si eksik.")
+        from app.services.stream_extractor import extract_stream_url
+        try:
+            source = extract_stream_url(camera.rtsp_url)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+    else:
+        source = camera.rtsp_url
     if source is None:
         raise HTTPException(status_code=400, detail="Kamera kaynagi eksik.")
     camera_runtime.start(camera_id, source)

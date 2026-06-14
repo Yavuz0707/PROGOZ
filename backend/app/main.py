@@ -34,6 +34,37 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
 
 
+def _auto_start_cameras() -> None:
+    """Background thread: start all enabled cameras after the server is ready."""
+    import time as _time
+    _time.sleep(3)  # Wait for server to fully initialize
+
+    from app.database import SessionLocal
+    from app.models.camera import Camera as CameraModel
+    from app.services.camera_service import camera_runtime
+
+    db = SessionLocal()
+    try:
+        cameras = db.query(CameraModel).filter(CameraModel.enabled == True).all()
+        for cam in cameras:
+            try:
+                if cam.source_type == "webcam":
+                    camera_runtime.start(cam.id, 0)
+                    logger.warning("Auto-start webcam id=%s name=%s", cam.id, cam.name)
+                elif cam.source_type == "rtsp" and cam.rtsp_url:
+                    camera_runtime.start(cam.id, cam.rtsp_url)
+                    logger.warning("Auto-start rtsp id=%s name=%s", cam.id, cam.name)
+                elif cam.source_type == "web" and cam.rtsp_url:
+                    from app.services.stream_extractor import extract_stream_url
+                    stream_url = extract_stream_url(cam.rtsp_url)
+                    camera_runtime.start(cam.id, stream_url)
+                    logger.warning("Auto-start web id=%s name=%s", cam.id, cam.name)
+            except Exception as exc:
+                logger.warning("Auto-start basarisiz id=%s name=%s: %s", cam.id, cam.name, exc)
+    finally:
+        db.close()
+
+
 @app.on_event("startup")
 def on_startup() -> None:
     global plate_cleanup_scheduler
@@ -62,6 +93,8 @@ def on_startup() -> None:
             logger.warning("CUDA pasif: CPU fallback kullanilacak. torch=%s", torch.__version__)
     except Exception as exc:
         logger.warning("Torch/CUDA durumu okunamadi: %s", exc)
+    import threading as _threading
+    _threading.Thread(target=_auto_start_cameras, daemon=True).start()
     try:
         _svc = _notification_module.notification_service
         if _svc.enabled:
