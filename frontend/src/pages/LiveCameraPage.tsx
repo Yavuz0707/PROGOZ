@@ -75,7 +75,7 @@ export default function LiveCameraPage() {
   return (
     <section className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div><h2 className="text-2xl font-semibold text-white">Canli Kamera</h2><p className="text-sm text-slate-400">Dusuk gecikmeli skor ve alarm takibi</p></div>
+        <div><h2 className="font-display text-[28px] font-bold uppercase tracking-hud text-white">Canli Kamera</h2><p className="font-data-mono text-xs text-slate-400">Dusuk gecikmeli skor ve alarm takibi</p></div>
         <button onClick={() => setAlarmSound((v) => !v)} className="focus-ring rounded-lg border border-line p-2 text-cyan-100" title="Sesli alarm">{alarmSound ? <Bell size={18} /> : <BellOff size={18} />}</button>
       </div>
       <div className="panel flex flex-wrap items-center gap-3 p-4">

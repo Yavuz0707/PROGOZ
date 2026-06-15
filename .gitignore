@@ -23,6 +23,12 @@ backend/app/static/clips/*
 !backend/app/static/processed/.gitkeep
 !backend/app/static/snapshots/.gitkeep
 !backend/app/static/clips/.gitkeep
+# Üretilen plaka görselleri / debug çıktıları (büyük, paylaşılmaz)
+backend/app/static/plate_crops/
+backend/app/static/plate_debug/
+backend/app/static/plates/
+# Büyük arşiv / yerel veri klasörü
+archive/
 frontend/node_modules/
 frontend/dist/
 

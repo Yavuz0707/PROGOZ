@@ -241,8 +241,8 @@ export default function PlatesPage() {
     <section className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-white">Plakalar</h2>
-          <p className="text-sm text-slate-400">Kaynağa göre filtrelenebilir plaka kayıtları</p>
+          <h2 className="font-display text-[28px] font-bold uppercase tracking-hud text-white">Plakalar</h2>
+          <p className="font-data-mono text-xs text-slate-400">Kaynağa göre filtrelenebilir plaka kayıtları</p>
         </div>
         {/* Stats Row */}
         <div className="hidden xl:flex items-center gap-5 text-sm">
@@ -422,12 +422,20 @@ export default function PlatesPage() {
 
                     {/* Confidence */}
                     <div className="flex items-center gap-2 mb-2">
-                      <span className={`text-sm font-semibold ${confidenceColor(plate.confidence)}`}>
+                      <span className={`font-data-mono text-sm font-semibold ${confidenceColor(plate.confidence)}`}>
                         %{Math.round(plate.confidence * 100)}
                       </span>
-                      <span className={`rounded px-1.5 py-0.5 text-xs ${plate.status === "valid" ? "bg-emerald-400/16 text-emerald-300" : "bg-yellow-400/16 text-yellow-200"}`}>
+                      <span className={`rounded px-1.5 py-0.5 font-label-caps text-[9px] ${plate.status === "valid" ? "bg-status-green/16 text-status-green" : "bg-status-amber/16 text-status-amber"}`}>
                         {plate.status === "valid" ? "Geçerli" : "Belirsiz"}
                       </span>
+                    </div>
+
+                    {/* OCR confidence bar (Stitch-style) */}
+                    <div className="mb-2 h-1 w-full overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className={`h-full ${plate.confidence >= 0.8 ? "bg-status-green" : plate.confidence >= 0.5 ? "bg-status-amber" : "bg-status-red"}`}
+                        style={{ width: `${Math.round(plate.confidence * 100)}%` }}
+                      />
                     </div>
 
                     {/* Meta */}

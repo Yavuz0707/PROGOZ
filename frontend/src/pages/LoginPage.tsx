@@ -68,9 +68,17 @@ export default function LoginPage() {
 
           {/* Foreground content */}
           <div className="login-splash-content">
-            <p className="login-splash-label">PROGÖZ</p>
+            <div className="login-splash-brand">
+              <span className="login-splash-glow" />
+              <h1 className="login-splash-title">PROGÖZ</h1>
+            </div>
+            <div className="login-splash-meta">
+              <span>SYS.V.1.0.0</span>
+              <span className="login-splash-meta-dot" />
+              <span>SEC-LEVEL: OMEGA</span>
+            </div>
             <button className="login-start-button" onClick={handleStart}>
-              Başlayın →
+              Sistemi Başlat →
             </button>
             <p className="login-splash-sub">Güvenlik sisteminize erişin</p>
           </div>

@@ -158,8 +158,8 @@ export default function EventsPage() {
     <section className="space-y-4">
       <div className="flex items-start justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-white">Olaylar</h2>
-          <p className="text-sm text-slate-400">Kaynağa göre gruplandırılmış olay kayıtları</p>
+          <h2 className="font-display text-[28px] font-bold uppercase tracking-hud text-white">Olaylar</h2>
+          <p className="font-data-mono text-xs text-slate-400">Kaynağa göre gruplandırılmış olay kayıtları</p>
         </div>
         {/* Stats Top-Right */}
         <div className="hidden xl:flex items-center gap-4 text-sm">

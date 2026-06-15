@@ -2,13 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ===== Design Tokens ===== */
+/* ===== Design Tokens — Stealth Surveillance ===== */
 :root {
   color-scheme: dark;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Geist", Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
   --background:       #000000;
-  --surface:          #0f0f0f;
+  --surface:          #131313;
   --card:             #141414;
   --card-hover:       #1a1a1a;
   --border:           #2a2a2a;
@@ -21,10 +21,10 @@
   --accent:           #ffffff;
   --accent-secondary: #cccccc;
 
-  --success:          #4ade80;
-  --warning:          #f59e0b;
-  --danger:           #ef4444;
-  --info:             #94a3b8;
+  --success:          #46ff78;
+  --warning:          #ffb347;
+  --danger:           #ff4646;
+  --info:             #4696ff;
 
   --sidebar-bg:       #080808;
   --sidebar-text:     #888888;
@@ -39,6 +39,8 @@ body {
   min-height: 100vh;
   background: #000000;
   color: #ffffff;
+  font-family: "Geist", Inter, ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -51,23 +53,116 @@ select {
 *, *::before, *::after {
   transition: background-color 150ms ease,
               border-color     150ms ease,
-              color            150ms ease;
+              color            150ms ease,
+              box-shadow        150ms ease;
+}
+
+/* Material Symbols icon font (used in a few HUD spots) */
+.material-symbols-outlined {
+  font-family: "Material Symbols Outlined";
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  direction: ltr;
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+}
+
+/* ===== Typography helpers (HUD aesthetic) ===== */
+.font-label-caps {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.font-data-mono {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+.font-headline-sm {
+  font-family: "Geist", sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.1em;
 }
 
 /* ===== Utility Classes ===== */
 .focus-ring {
-  @apply focus:outline-none focus:ring-2 focus:ring-white/50 focus:ring-offset-2 focus:ring-offset-black;
+  @apply focus:outline-none focus:ring-2 focus:ring-white/40 focus:ring-offset-2 focus:ring-offset-black;
 }
 
-.panel {
-  @apply rounded-lg border border-line bg-panel shadow-xl shadow-black/40;
+/* Glassmorphic container — the core "stealth" surface.
+   Applied to .panel so every existing page picks up the new look. */
+.panel,
+.glass-panel {
+  position: relative;
+  border-radius: 0.5rem;
+  background: rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05),
+              0 8px 30px rgba(0, 0, 0, 0.4);
 }
 
-/* ===== Scrollbar ===== */
+/* Subtle top-edge light on glass panels (light hitting the top of glass) */
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* Functional status glows */
+.glow-green { box-shadow: 0 0 12px rgba(70, 255, 120, 0.45); }
+.glow-amber { box-shadow: 0 0 12px rgba(255, 179, 71, 0.45); }
+.glow-red   { box-shadow: 0 0 12px rgba(255, 70, 70, 0.45); }
+.glow-blue  { box-shadow: 0 0 12px rgba(70, 150, 255, 0.45); }
+.glow-white { box-shadow: 0 0 8px rgba(255, 255, 255, 0.5); }
+
+/* ===== Custom toggle switch (Settings / Cameras) ===== */
+.switch { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.switch .track {
+  width: 44px; height: 24px; border-radius: 9999px;
+  background: #353535;
+  border: 1px solid rgba(255,255,255,0.1);
+  box-shadow: inset 0 0 5px rgba(0,0,0,0.5);
+  position: relative;
+  transition: background 200ms ease;
+}
+.switch .track::after {
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 18px; height: 18px; border-radius: 9999px; background: #fff;
+  transition: transform 200ms ease;
+}
+.switch input:checked + .track { background: rgba(255,255,255,0.4); }
+.switch input:checked + .track::after { transform: translateX(20px); }
+
+/* ===== Custom range slider (Settings) ===== */
+input[type="range"].hud-range {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 4px; border-radius: 2px;
+  background: rgba(255,255,255,0.1); cursor: pointer;
+}
+input[type="range"].hud-range::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  height: 16px; width: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 0 10px rgba(255,255,255,0.5);
+}
+
+/* ===== Scrollbar (ultra-thin, low-noise) ===== */
 ::-webkit-scrollbar          { width: 4px; height: 4px; }
-::-webkit-scrollbar-track    { background: #0f0f0f; }
-::-webkit-scrollbar-thumb    { background: #2a2a2a; border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+::-webkit-scrollbar-track    { background: transparent; }
+::-webkit-scrollbar-thumb    { background: rgba(255,255,255,0.2); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.4); }
 
 /* ===== Animations ===== */
 @keyframes fadeIn {
@@ -75,6 +170,17 @@ select {
   to   { opacity: 1; transform: translateY(0); }
 }
 .fade-in { animation: fadeIn 300ms ease forwards; }
+
+/* Staggered card entrance — set --i on each child for delay */
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.stagger > * {
+  opacity: 0;
+  animation: cardIn 0.4s ease forwards;
+  animation-delay: calc(var(--i, 0) * 50ms);
+}
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -178,6 +284,53 @@ select {
   animation: loginFadeInUp 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 
+/* Big cinematic PROGÖZ brand with ambient internal glow */
+.login-splash-brand {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+}
+.login-splash-glow {
+  position: absolute;
+  width: 16rem;
+  height: 16rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.10);
+  filter: blur(100px);
+  pointer-events: none;
+}
+.login-splash-title {
+  position: relative;
+  z-index: 1;
+  font-family: "Geist", sans-serif;
+  font-size: clamp(2.75rem, 9vw, 4.5rem);
+  font-weight: 700;
+  letter-spacing: 0.4em;
+  margin: 0 -0.4em 0 0;
+  color: #ffffff;
+  text-transform: uppercase;
+  box-shadow: 0 0 80px 20px rgba(255, 255, 255, 0.05);
+  border-radius: 9999px;
+}
+
+/* Technical metadata line (decorative HUD) */
+.login-splash-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.6875rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #888888;
+  opacity: 0.6;
+}
+.login-splash-meta-dot {
+  width: 4px; height: 4px; border-radius: 9999px; background: #888888;
+}
+
 .login-splash-label {
   font-size: 0.8125rem;
   font-weight: 700;
@@ -230,10 +383,17 @@ select {
 .login-form {
   width: 100%;
   max-width: 400px;
-  background: #111111;
-  border: 1px solid #2a2a2a;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   padding: 2rem;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.login-form-title {
+  font-family: "Geist", sans-serif;
 }
 
 .login-form-header {

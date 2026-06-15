@@ -238,9 +238,9 @@ export default function VideoUploadPage() {
 
   return (
     <section className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-semibold text-white">Video Analiz</h2>
-        <p className="text-sm text-slate-400">Dosya yukle, analiz ilerlemesini gercek zamanli izle.</p>
+      <div className="border-b border-white/10 pb-4">
+        <h2 className="font-display text-[28px] font-bold uppercase tracking-hud text-white">Video Analiz</h2>
+        <p className="font-data-mono text-xs text-slate-400">Dosya yukle, analiz ilerlemesini gercek zamanli izle.</p>
       </div>
 
       {/* Upload Controls */}

@@ -145,9 +145,9 @@ export default function WebStreamPage() {
 
   return (
     <section className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-semibold text-white">Web Yayini</h2>
-        <p className="text-sm text-slate-400">
+      <div className="border-b border-white/10 pb-4">
+        <h2 className="font-display text-[28px] font-bold uppercase tracking-hud text-white">Web Yayini</h2>
+        <p className="font-data-mono text-xs text-slate-400">
           Canli guvenlik kamerasi veya web yayini adresini girin — model gercek zamanli analiz etsin
         </p>
       </div>

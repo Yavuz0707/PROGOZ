@@ -28,22 +28,22 @@ function StatCard({
   trend?: "up" | "down" | "flat";
 }) {
   return (
-    <div className="panel p-5 flex items-start gap-4">
-      <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${accent ? "bg-cyan-400/20 text-cyan-300" : "bg-slate-800 text-slate-400"}`}>
-        <Icon size={20} />
+    <div className="glass-panel overflow-hidden p-5">
+      <div className="mb-3 flex items-start justify-between">
+        <span className="font-label-caps text-[10px] text-slate-400">{label}</span>
+        <div className={`grid h-7 w-7 place-items-center rounded ${accent ? "text-white" : "text-slate-500"}`}>
+          <Icon size={16} />
+        </div>
       </div>
-      <div className="min-w-0 flex-1">
-        <p className="text-xs text-slate-400">{label}</p>
-        <p className="mt-0.5 text-2xl font-bold text-white leading-tight">{value}</p>
-        {sub && (
-          <p className="mt-0.5 flex items-center gap-1 text-xs text-slate-500">
-            {trend === "up" && <ArrowUp size={10} className="text-emerald-400" />}
-            {trend === "down" && <ArrowDown size={10} className="text-red-400" />}
-            {trend === "flat" && <Minus size={10} className="text-slate-500" />}
-            {sub}
-          </p>
-        )}
-      </div>
+      <p className="font-display text-[40px] font-bold leading-none text-white">{value}</p>
+      {sub && (
+        <p className="mt-2 flex items-center gap-1 font-data-mono text-[10px] text-slate-500">
+          {trend === "up" && <ArrowUp size={11} className="text-status-green" />}
+          {trend === "down" && <ArrowDown size={11} className="text-status-red" />}
+          {trend === "flat" && <Minus size={11} className="text-slate-500" />}
+          {sub}
+        </p>
+      )}
     </div>
   );
 }
@@ -149,13 +149,13 @@ export default function DashboardPage() {
 
   return (
     <section className="space-y-5">
-      <div>
-        <h2 className="text-2xl font-semibold text-white">Dashboard</h2>
-        <p className="text-sm text-slate-400">Kamera, analiz ve sistem sağlığı özeti</p>
+      <div className="border-b border-white/10 pb-4">
+        <h2 className="font-display text-[28px] font-bold uppercase tracking-hud text-white">Dashboard</h2>
+        <p className="font-data-mono text-xs text-slate-400">Kamera, analiz ve sistem sağlığı özeti</p>
       </div>
 
       {/* ——— ROW 1: 4 Stat Cards ——— */}
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="stagger grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
           icon={Camera}
           label="Aktif Kameralar"
@@ -177,23 +177,23 @@ export default function DashboardPage() {
           value={plateStats?.today ?? "-"}
           sub={plateStats ? `Toplam ${plateStats.total} benzersiz` : undefined}
         />
-        <div className="panel p-5 flex items-start gap-4">
-          <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${status?.cuda_available ? "bg-cyan-400/20 text-cyan-300" : "bg-slate-800 text-slate-400"}`}>
-            <Cpu size={20} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-xs text-slate-400">Sistem Durumu</p>
-            <p className="mt-0.5 text-sm font-bold text-white">
-              {status ? (status.cuda_available ? "CUDA Aktif" : "CPU Modu") : "..."}
-            </p>
-            <div className="mt-1 space-y-0.5 text-xs text-slate-500">
-              {status?.device_name && <p className="truncate">{status.device_name}</p>}
-              <p>{status?.model || "-"} · skip:{status?.frame_skip ?? "-"}</p>
-              <p className="flex items-center gap-1">
-                <span className={`h-1.5 w-1.5 rounded-full ${status ? "bg-emerald-400" : "bg-slate-600"}`} />
-                {status ? "Model yüklü" : "Yükleniyor"}
-              </p>
+        <div className="glass-panel overflow-hidden p-5">
+          <div className="mb-3 flex items-start justify-between">
+            <span className="font-label-caps text-[10px] text-slate-400">Sistem Durumu</span>
+            <div className={`grid h-7 w-7 place-items-center rounded ${status?.cuda_available ? "text-status-blue" : "text-slate-500"}`}>
+              <Cpu size={16} />
             </div>
+          </div>
+          <p className="font-display text-lg font-bold text-white">
+            {status ? (status.cuda_available ? "CUDA Aktif" : "CPU Modu") : "..."}
+          </p>
+          <div className="mt-1.5 space-y-0.5 font-data-mono text-[10px] text-slate-500">
+            {status?.device_name && <p className="truncate">{status.device_name}</p>}
+            <p>{status?.model || "-"} · skip:{status?.frame_skip ?? "-"}</p>
+            <p className="flex items-center gap-1.5">
+              <span className={`h-1.5 w-1.5 rounded-full ${status ? "bg-status-green shadow-glow-green" : "bg-slate-600"}`} />
+              {status ? "Model yüklü" : "Yükleniyor"}
+            </p>
           </div>
         </div>
       </div>
