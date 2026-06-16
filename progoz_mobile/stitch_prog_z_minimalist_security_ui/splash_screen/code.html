@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PROGÖZ - Splash Screen</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "inverse-surface": "#e5e2e1",
+                      "error": "#ffb4ab",
+                      "surface-container": "#201f1f",
+                      "on-secondary-container": "#bab8b7",
+                      "surface-container-highest": "#353434",
+                      "surface-bright": "#3a3939",
+                      "on-error-container": "#ffdad6",
+                      "background": "#141313",
+                      "primary": "#ffffff",
+                      "inverse-primary": "#5d5f5f",
+                      "primary-fixed": "#e2e2e2",
+                      "surface-dim": "#141313",
+                      "tertiary-fixed": "#e2e2e2",
+                      "on-secondary-fixed-variant": "#474646",
+                      "on-surface": "#e5e2e1",
+                      "on-tertiary-fixed": "#1a1c1c",
+                      "error-container": "#93000a",
+                      "on-secondary-fixed": "#1c1b1b",
+                      "outline": "#8e9192",
+                      "surface-container-lowest": "#0e0e0e",
+                      "surface-container-low": "#1c1b1b",
+                      "outline-variant": "#444748",
+                      "surface-container-high": "#2a2a2a",
+                      "on-tertiary": "#2f3131",
+                      "secondary-fixed-dim": "#c9c6c5",
+                      "tertiary-fixed-dim": "#c6c6c7",
+                      "on-error": "#690005",
+                      "on-primary-fixed": "#1a1c1c",
+                      "tertiary": "#ffffff",
+                      "on-background": "#e5e2e1",
+                      "surface-variant": "#353434",
+                      "tertiary-container": "#e2e2e2",
+                      "surface": "#141313",
+                      "on-secondary": "#313030",
+                      "primary-container": "#e2e2e2",
+                      "on-primary": "#2f3131",
+                      "surface-tint": "#c6c6c7",
+                      "on-surface-variant": "#c4c7c8",
+                      "on-primary-fixed-variant": "#454747",
+                      "secondary-fixed": "#e5e2e1",
+                      "primary-fixed-dim": "#c6c6c7",
+                      "on-primary-container": "#636565",
+                      "on-tertiary-fixed-variant": "#454747",
+                      "secondary": "#c9c6c5",
+                      "secondary-container": "#4a4949",
+                      "inverse-on-surface": "#313030",
+                      "on-tertiary-container": "#636565"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "stack-gap": "12px",
+                      "container-padding-desktop": "32px",
+                      "section-gap": "40px",
+                      "container-padding-mobile": "16px",
+                      "gutter": "16px",
+                      "base": "8px"
+              },
+              "fontFamily": {
+                      "body-lg": ["Geist"],
+                      "label-sm": ["JetBrains Mono"],
+                      "headline-lg": ["Geist"],
+                      "display-lg": ["Geist"],
+                      "body-md": ["Geist"],
+                      "label-md": ["JetBrains Mono"],
+                      "headline-sm": ["Geist"],
+                      "headline-md": ["Geist"]
+              },
+              "fontSize": {
+                      "body-lg": ["18px", {"lineHeight": "26px", "fontWeight": "400"}],
+                      "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                      "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                      "display-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                      "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                      "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                      "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "500"}],
+                      "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "500"}]
+              }
+            }
+          }
+        }
+    </script>
+<style>
+        .animate-fade-scale {
+            animation: fadeScale 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+            transform: scale(0.95);
+        }
+        
+        .animate-fade-up {
+            animation: fadeUp 1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        
+        .delay-100 {
+            animation-delay: 100ms;
+        }
+        
+        .delay-300 {
+            animation-delay: 300ms;
+        }
+        
+        .delay-500 {
+            animation-delay: 500ms;
+        }
+
+        @keyframes fadeScale {
+            0% {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+            100% {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes fadeUp {
+            0% {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            100% {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .loading-line {
+            width: 0%;
+            height: 2px;
+            background-color: #ffffff;
+            animation: load 2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            animation-delay: 800ms;
+        }
+
+        @keyframes load {
+            0% { width: 0%; opacity: 0; }
+            10% { opacity: 1; }
+            100% { width: 100%; opacity: 1; }
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-[#000000] text-primary h-screen w-screen overflow-hidden flex flex-col items-center justify-center relative font-body-md">
+<!-- Main Content Canvas (Navigation Suppressed for Splash Screen) -->
+<main class="flex flex-col items-center justify-center w-full h-full relative z-10 px-container-padding-mobile md:px-container-padding-desktop">
+<!-- Center Brand Group -->
+<div class="flex flex-col items-center space-y-6 text-center w-full max-w-sm">
+<!-- Security Icon -->
+<div class="animate-fade-scale delay-100 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-[48px]" style="font-variation-settings: 'FILL' 0, 'wght' 200;">
+                    security
+                </span>
+</div>
+<!-- Wordmark -->
+<h1 class="animate-fade-scale delay-300 font-display-lg text-display-lg font-bold tracking-[0.2em] text-primary uppercase select-none">
+                PROGÖZ
+            </h1>
+<!-- Subtitle -->
+<h2 class="animate-fade-up delay-500 font-label-sm text-label-sm tracking-[0.25em] text-on-surface-variant uppercase select-none">
+                PROAKTİF GÖZETİM SİSTEMİ
+            </h2>
+</div>
+</main>
+<!-- Bottom Loading Bar Area -->
+<div class="absolute bottom-16 left-0 right-0 w-full flex justify-center px-8 md:px-32 opacity-0 animate-fade-up delay-500">
+<div class="w-full max-w-md h-[1px] bg-surface-container-high relative overflow-hidden">
+<!-- The pure CSS loading line as fallback, but if we had a shader it would go here -->
+<div class="loading-line absolute top-0 left-0 h-full"></div>
+<!-- Optional: WebGL Shader for pulse effect if requested, embedded per rules -->
+<!-- <webgl-shader src="{{DATA:ANIMATION:ANIMATION_1}}" class="absolute inset-0 w-full h-full opacity-50"></webgl-shader> -->
+</div>
+</div>
+<script>
+        // Optional script to redirect after splash animation completes
+        setTimeout(() => {
+            console.log("Splash screen animation complete. Ready to transition.");
+            // window.location.href = '/dashboard.html'; // Example redirect
+        }, 3500);
+    </script>
+</body></html>

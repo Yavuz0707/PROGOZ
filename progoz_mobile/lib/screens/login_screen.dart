@@ -10,27 +10,15 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
-  late final AnimationController _glowController;
-
-  @override
-  void initState() {
-    super.initState();
-    _glowController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2200),
-    )..repeat(reverse: true);
-  }
 
   @override
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
-    _glowController.dispose();
     super.dispose();
   }
 
@@ -68,17 +56,7 @@ class _LoginScreenState extends State<LoginScreen>
         decoration: const BoxDecoration(gradient: AppColors.bgGradient),
         child: Stack(
           children: [
-            // Arka plan glow lekeleri
-            Positioned(
-              top: -80,
-              right: -60,
-              child: _BlurBlob(color: AppColors.primary.withValues(alpha: 0.18), size: 220),
-            ),
-            Positioned(
-              bottom: -100,
-              left: -80,
-              child: _BlurBlob(color: AppColors.info.withValues(alpha: 0.14), size: 260),
-            ),
+            // Arka plan glow lekeleri kaldırıldı (monokrom, düz zemin — gölge/glow yok).
             SafeArea(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -140,42 +118,25 @@ class _LoginScreenState extends State<LoginScreen>
   Widget _buildLogo() {
     return Column(
       children: [
-        AnimatedBuilder(
-          animation: _glowController,
-          builder: (context, child) {
-            final glow = 0.25 + _glowController.value * 0.35;
-            return Container(
-              width: 92,
-              height: 92,
-              decoration: BoxDecoration(
-                color: AppColors.surface,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: AppColors.primary, width: 2),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: glow),
-                    blurRadius: 28,
-                    spreadRadius: 2,
-                  ),
-                ],
-              ),
-              child: child,
-            );
-          },
+        // Düz, çerçeveli ikon (glow/gölge yok — monokrom).
+        Container(
+          width: 92,
+          height: 92,
+          decoration: BoxDecoration(
+            color: AppColors.card,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.border),
+          ),
           child: const Icon(Icons.security, size: 48, color: AppColors.primary),
         ),
         const SizedBox(height: 22),
-        ShaderMask(
-          shaderCallback: (bounds) =>
-              AppColors.primaryGradient.createShader(bounds),
-          child: const Text(
-            'PROGÖZ',
-            style: TextStyle(
-              fontSize: 34,
-              fontWeight: FontWeight.bold,
-              color: Colors.white,
-              letterSpacing: 7,
-            ),
+        const Text(
+          'PROGÖZ',
+          style: TextStyle(
+            fontSize: 34,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+            letterSpacing: 7,
           ),
         ),
         const SizedBox(height: 8),
@@ -184,25 +145,6 @@ class _LoginScreenState extends State<LoginScreen>
           style: TextStyle(color: AppColors.textSecondary, fontSize: 14, letterSpacing: 1),
         ),
       ],
-    );
-  }
-}
-
-class _BlurBlob extends StatelessWidget {
-  final Color color;
-  final double size;
-  const _BlurBlob({required this.color, required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        boxShadow: [BoxShadow(color: color, blurRadius: 120, spreadRadius: 40)],
-        color: color,
-      ),
     );
   }
 }
@@ -237,7 +179,7 @@ class _GlassField extends StatelessWidget {
       style: const TextStyle(color: AppColors.textPrimary),
       decoration: InputDecoration(
         labelText: label,
-        prefixIcon: Icon(icon, color: AppColors.primary),
+        prefixIcon: Icon(icon, color: AppColors.textSecondary),
         suffixIcon: suffix,
       ),
     );
@@ -257,16 +199,8 @@ class _GlowButton extends StatelessWidget {
         height: 54,
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          gradient: AppColors.primaryGradient,
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primary.withValues(alpha: 0.4),
-              blurRadius: 20,
-              spreadRadius: -2,
-              offset: const Offset(0, 6),
-            ),
-          ],
+          color: AppColors.primary,
+          borderRadius: BorderRadius.circular(12),
         ),
         child: loading
             ? const SizedBox(

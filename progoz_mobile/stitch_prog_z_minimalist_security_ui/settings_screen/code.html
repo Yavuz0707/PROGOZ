@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="tr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PROGÖZ - Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=JetBrains+Mono:wght@500&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "inverse-surface": "#e5e2e1",
+                        "error": "#ffb4ab",
+                        "surface-container": "#201f1f",
+                        "on-secondary-container": "#bab8b7",
+                        "surface-container-highest": "#353434",
+                        "surface-bright": "#3a3939",
+                        "on-error-container": "#ffdad6",
+                        "background": "#141313",
+                        "primary": "#ffffff",
+                        "inverse-primary": "#5d5f5f",
+                        "primary-fixed": "#e2e2e2",
+                        "surface-dim": "#141313",
+                        "tertiary-fixed": "#e2e2e2",
+                        "on-secondary-fixed-variant": "#474646",
+                        "on-surface": "#e5e2e1",
+                        "on-tertiary-fixed": "#1a1c1c",
+                        "error-container": "#93000a",
+                        "on-secondary-fixed": "#1c1b1b",
+                        "outline": "#8e9192",
+                        "surface-container-lowest": "#0e0e0e",
+                        "surface-container-low": "#1c1b1b",
+                        "outline-variant": "#444748",
+                        "surface-container-high": "#2a2a2a",
+                        "on-tertiary": "#2f3131",
+                        "secondary-fixed-dim": "#c9c6c5",
+                        "tertiary-fixed-dim": "#c6c6c7",
+                        "on-error": "#690005",
+                        "on-primary-fixed": "#1a1c1c",
+                        "tertiary": "#ffffff",
+                        "on-background": "#e5e2e1",
+                        "surface-variant": "#353434",
+                        "tertiary-container": "#e2e2e2",
+                        "surface": "#141313",
+                        "on-secondary": "#313030",
+                        "primary-container": "#e2e2e2",
+                        "on-primary": "#2f3131",
+                        "surface-tint": "#c6c6c7",
+                        "on-surface-variant": "#c4c7c8",
+                        "on-primary-fixed-variant": "#454747",
+                        "secondary-fixed": "#e5e2e1",
+                        "primary-fixed-dim": "#c6c6c7",
+                        "on-primary-container": "#636565",
+                        "on-tertiary-fixed-variant": "#454747",
+                        "secondary": "#c9c6c5",
+                        "secondary-container": "#4a4949",
+                        "inverse-on-surface": "#313030",
+                        "on-tertiary-container": "#636565"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-gap": "12px",
+                        "container-padding-desktop": "32px",
+                        "section-gap": "40px",
+                        "container-padding-mobile": "16px",
+                        "gutter": "16px",
+                        "base": "8px"
+                    },
+                    "fontFamily": {
+                        "body-lg": ["Geist"],
+                        "label-sm": ["JetBrains Mono"],
+                        "headline-lg": ["Geist"],
+                        "display-lg": ["Geist"],
+                        "body-md": ["Geist"],
+                        "label-md": ["JetBrains Mono"],
+                        "headline-sm": ["Geist"],
+                        "headline-md": ["Geist"]
+                    },
+                    "fontSize": {
+                        "body-lg": ["18px", {"lineHeight": "26px", "fontWeight": "400"}],
+                        "label-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "500"}],
+                        "headline-lg": ["32px", {"lineHeight": "40px", "letterSpacing": "-0.01em", "fontWeight": "600"}],
+                        "display-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "600"}],
+                        "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                        "label-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0.02em", "fontWeight": "500"}],
+                        "headline-sm": ["20px", {"lineHeight": "28px", "fontWeight": "500"}],
+                        "headline-md": ["24px", {"lineHeight": "32px", "fontWeight": "500"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #000000;
+            color: #ffffff;
+            -webkit-font-smoothing: antialiased;
+        }
+        
+        .toggle-checkbox:checked {
+            background-color: #ffffff;
+            border-color: #ffffff;
+        }
+        .toggle-checkbox:checked::after {
+            transform: translateX(100%);
+            background-color: #000000;
+        }
+        .toggle-checkbox {
+            appearance: none;
+            width: 44px;
+            height: 24px;
+            background-color: #161616;
+            border: 1px solid #2a2a2a;
+            border-radius: 9999px;
+            position: relative;
+            cursor: pointer;
+            outline: none;
+            transition: background-color 0.2s, border-color 0.2s;
+        }
+        .toggle-checkbox::after {
+            content: '';
+            position: absolute;
+            top: 1px;
+            left: 2px;
+            width: 20px;
+            height: 20px;
+            background-color: #ffffff;
+            border-radius: 50%;
+            transition: transform 0.2s, background-color 0.2s;
+        }
+        
+        .toast {
+            opacity: 0;
+            transform: translateY(100%);
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        .toast.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        
+        /* Monochromatic strict styling */
+        .card-surface {
+            background-color: #161616;
+            border: 1px solid #2a2a2a;
+        }
+        
+        .input-monochrome {
+            background-color: #0d0d0d;
+            border: 1px solid #2a2a2a;
+            color: #ffffff;
+        }
+        .input-monochrome:focus {
+            border-color: #ffffff;
+            outline: none;
+            box-shadow: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="min-h-screen flex flex-col font-body-md text-body-md">
+<!-- TopAppBar -->
+<header class="bg-background dark:bg-background text-primary dark:text-primary font-headline-sm text-headline-sm w-full top-0 sticky border-b border-outline-variant flat no shadows transition-opacity duration-200 hover:opacity-80 flex justify-between items-center px-container-padding-mobile md:px-container-padding-desktop h-16 z-50">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">security</span>
+<span class="font-headline-md text-headline-md font-bold tracking-tighter text-primary">PROGÖZ</span>
+</div>
+<button class="text-on-surface-variant hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">notifications</span>
+</button>
+</header>
+<!-- Main Layout (Fluid on mobile, Grid on desktop) -->
+<main class="flex-1 flex flex-col md:grid md:grid-cols-12 md:gap-gutter px-container-padding-mobile md:px-container-padding-desktop py-8 mb-24 max-w-7xl mx-auto w-full">
+<!-- Desktop Sidebar (Hidden on mobile) -->
+<aside class="hidden md:block md:col-span-3">
+<nav class="flex flex-col gap-2 card-surface p-4 rounded-lg">
+<a class="flex items-center gap-3 p-3 text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">notifications</span>
+<span class="font-body-md text-body-md">Notifications</span>
+</a>
+<a class="flex items-center gap-3 p-3 text-on-surface-variant hover:text-primary transition-colors" href="#">
+<span class="material-symbols-outlined">directions_car</span>
+<span class="font-body-md text-body-md">Plates</span>
+</a>
+<a class="flex items-center gap-3 p-3 text-primary bg-surface-container-highest rounded-lg transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="font-body-md text-body-md">Settings</span>
+</a>
+</nav>
+</aside>
+<!-- Main Content Area -->
+<div class="flex-1 md:col-span-9 flex flex-col gap-section-gap">
+<!-- User Card -->
+<section class="card-surface p-6 rounded-lg flex items-center gap-4">
+<div class="w-16 h-16 rounded-full border border-outline-variant flex items-center justify-center bg-surface-container-lowest">
+<span class="material-symbols-outlined text-4xl text-on-surface-variant">person</span>
+</div>
+<div class="flex flex-col">
+<h2 class="font-headline-md text-headline-md text-primary">Username</h2>
+<p class="font-body-md text-body-md text-on-surface-variant">Aktif Oturum</p>
+</div>
+</section>
+<!-- Server Section -->
+<section class="flex flex-col gap-stack-gap">
+<h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">SERVER CONFIGURATION</h3>
+<div class="card-surface p-6 rounded-lg flex flex-col sm:flex-row gap-4 items-end">
+<div class="flex-1 w-full">
+<label class="block font-label-md text-label-md text-on-surface-variant mb-2" for="server-url">Endpoint URL</label>
+<input class="input-monochrome w-full h-12 px-4 rounded font-body-md text-body-md" id="server-url" type="text" value="https://api.progoz.local/v1"/>
+</div>
+<button class="bg-primary text-black h-12 px-8 rounded font-label-md text-label-md hover:bg-opacity-90 active:scale-95 transition-all w-full sm:w-auto" id="save-server-btn">
+                        Kaydet
+                    </button>
+</div>
+</section>
+<!-- Notifications Section -->
+<section class="flex flex-col gap-stack-gap">
+<h3 class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-widest">SYSTEM ALERTS</h3>
+<div class="card-surface rounded-lg divide-y divide-outline-variant">
+<div class="p-4 sm:p-6 flex justify-between items-center hover:bg-surface-container-lowest transition-colors">
+<div class="flex flex-col max-w-[80%]">
+<span class="font-body-lg text-body-lg text-primary">Plate Recognition Alerts</span>
+<span class="font-body-md text-body-md text-on-surface-variant">Push notifications for identified hotlist vehicles.</span>
+</div>
+<input checked="" class="toggle-checkbox" type="checkbox"/>
+</div>
+<div class="p-4 sm:p-6 flex justify-between items-center hover:bg-surface-container-lowest transition-colors">
+<div class="flex flex-col max-w-[80%]">
+<span class="font-body-lg text-body-lg text-primary">System Health</span>
+<span class="font-body-md text-body-md text-on-surface-variant">Camera connection drops and server latency warnings.</span>
+</div>
+<input checked="" class="toggle-checkbox" type="checkbox"/>
+</div>
+<div class="p-4 sm:p-6 flex justify-between items-center hover:bg-surface-container-lowest transition-colors">
+<div class="flex flex-col max-w-[80%]">
+<span class="font-body-lg text-body-lg text-primary">Weekly Reports</span>
+<span class="font-body-md text-body-md text-on-surface-variant">Automated traffic and incident summaries.</span>
+</div>
+<input class="toggle-checkbox" type="checkbox"/>
+</div>
+</div>
+</section>
+<!-- Danger Zone -->
+<section class="mt-8 pt-8 border-t border-outline-variant flex justify-center md:justify-start">
+<button class="border border-error text-error h-12 px-8 rounded font-label-md text-label-md hover:bg-error hover:bg-opacity-10 active:scale-95 transition-all w-full md:w-auto">
+                    Oturumu Kapat
+                </button>
+</section>
+</div>
+</main>
+<!-- BottomNavBar (Visible only on mobile) -->
+<nav class="md:hidden bg-surface-container-low dark:bg-surface-container-low text-primary dark:text-primary font-label-sm text-label-sm font-headline-sm text-headline-sm fixed bottom-0 w-full z-50 border-t border-outline-variant flat no shadows flex justify-around items-center h-20 pb-safe px-4">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary active:scale-95 transition-transform duration-100" href="#">
+<span class="material-symbols-outlined mb-1">notifications</span>
+<span>Notifications</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:text-primary active:scale-95 transition-transform duration-100" href="#">
+<span class="material-symbols-outlined mb-1">directions_car</span>
+<span>Plates</span>
+</a>
+<a class="flex flex-col items-center justify-center text-primary bg-surface-container-highest rounded-xl px-4 py-1 active:scale-95 transition-transform duration-100" href="#">
+<span class="material-symbols-outlined mb-1">settings</span>
+<span>Settings</span>
+</a>
+</nav>
+<!-- Toast Notification -->
+<div class="toast fixed bottom-24 md:bottom-8 left-1/2 transform -translate-x-1/2 bg-primary text-black px-6 py-3 rounded shadow-lg font-label-md text-label-md flex items-center gap-2 z-50 pointer-events-none" id="toast">
+<span class="material-symbols-outlined text-sm">check_circle</span>
+        Kaydedildi
+    </div>
+<script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const saveBtn = document.getElementById('save-server-btn');
+            const toast = document.getElementById('toast');
+            let toastTimeout;
+
+            saveBtn.addEventListener('click', () => {
+                // Show toast
+                clearTimeout(toastTimeout);
+                toast.classList.add('show');
+                
+                toastTimeout = setTimeout(() => {
+                    toast.classList.remove('show');
+                }, 3000);
+            });
+        });
+    </script>
+</body></html>

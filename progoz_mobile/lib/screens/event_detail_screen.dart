@@ -179,7 +179,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               icon: Icons.check_circle_outline,
                               gradient: AppColors.primaryGradient,
                               foreground: Colors.black,
-                              glow: AppColors.primary,
                             ),
                           ),
                         ),
@@ -284,15 +283,10 @@ class _GradientHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [
-            levelColor.withValues(alpha: 0.35),
-            AppColors.background.withValues(alpha: 0.0),
-          ],
-        ),
+      // Renkli gradient kaldırıldı — düz zemin + alt kenarlık (Stitch sade header).
+      decoration: const BoxDecoration(
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: SafeArea(
         bottom: false,
@@ -319,16 +313,9 @@ class _GradientHeader extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                   decoration: BoxDecoration(
-                    color: levelColor.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(14),
+                    color: levelColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: levelColor),
-                    boxShadow: [
-                      BoxShadow(
-                        color: levelColor.withValues(alpha: 0.35),
-                        blurRadius: 22,
-                        spreadRadius: -2,
-                      ),
-                    ],
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -447,7 +434,6 @@ class _ActionButton extends StatelessWidget {
   final Gradient? gradient;
   final Color? outlineColor;
   final Color foreground;
-  final Color? glow;
 
   const _ActionButton({
     required this.label,
@@ -455,7 +441,6 @@ class _ActionButton extends StatelessWidget {
     this.gradient,
     this.outlineColor,
     required this.foreground,
-    this.glow,
   });
 
   @override
@@ -465,19 +450,12 @@ class _ActionButton extends StatelessWidget {
       alignment: Alignment.center,
       decoration: BoxDecoration(
         gradient: gradient,
-        color: gradient == null ? AppColors.card : null,
-        borderRadius: BorderRadius.circular(14),
+        // Glow kaldırıldı; outline buton şeffaf zeminli (Stitch secondary).
+        color: outlineColor != null
+            ? Colors.transparent
+            : (gradient == null ? AppColors.card : null),
+        borderRadius: BorderRadius.circular(12),
         border: outlineColor != null ? Border.all(color: outlineColor!) : null,
-        boxShadow: glow != null
-            ? [
-                BoxShadow(
-                  color: glow!.withValues(alpha: 0.4),
-                  blurRadius: 18,
-                  spreadRadius: -2,
-                  offset: const Offset(0, 5),
-                ),
-              ]
-            : null,
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,

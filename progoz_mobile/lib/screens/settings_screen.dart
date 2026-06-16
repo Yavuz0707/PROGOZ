@@ -57,12 +57,8 @@ class _GradientAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.primaryGlow)),
-        gradient: LinearGradient(
-          colors: [Color(0xFF111827), Color(0xFF0A0E1A)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: const SafeArea(
         bottom: false,
@@ -97,7 +93,7 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         title.toUpperCase(),
         style: const TextStyle(
-          color: AppColors.primary,
+          color: AppColors.textSecondary,
           fontSize: 11,
           fontWeight: FontWeight.bold,
           letterSpacing: 1.5,

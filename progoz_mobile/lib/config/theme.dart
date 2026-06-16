@@ -1,33 +1,49 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
+// ---------------------------------------------------------------------------
+// PROGÖZ – "Obsidian Sentinel" monokrom güvenlik teması (Stitch referansı)
+// Tüm renkler tek merkezde; gradient/glow/gölge KULLANILMAZ (düz, opak yüzeyler,
+// 1px #2A2A2A kenarlık). Aksан renkler yalnız fonksiyonel alarm anlamı taşır.
+// ---------------------------------------------------------------------------
 class AppColors {
-  static const background = Color(0xFF0A0E1A);
-  static const surface = Color(0xFF111827);
-  static const card = Color(0xFF1A2235);
-  static const cardHover = Color(0xFF1E2A40);
-  static const surfaceVariant = Color(0xFF1E2A40);
-  static const primary = Color(0xFF00D4AA);
-  static const primaryGlow = Color(0x4000D4AA);
-  static const error = Color(0xFFFF4757);
-  static const warning = Color(0xFFFFA502);
-  static const caution = Color(0xFFFFD32A);
-  static const info = Color(0xFF3498DB);
-  static const plate = Color(0xFF3498DB);
-  static const textPrimary = Color(0xFFFFFFFF);
-  static const textSecondary = Color(0xFF8892B0);
-  static const border = Color(0x15FFFFFF);
+  // Yüzeyler (monokrom ton katmanlama)
+  static const background = Color(0xFF141313); // ana zemin
+  static const surface = Color(0xFF0D0D0D); // appbar / input / bottom nav zemini
+  static const card = Color(0xFF161616); // kart zemini (düz)
+  static const cardHover = Color(0xFF1C1B1B);
+  static const surfaceVariant = Color(0xFF2A2A2A); // ikincil dolgu / track / badge
+  static const border = Color(0xFF2A2A2A); // 1px kenarlık (her yerde)
 
+  // Vurgu: saf beyaz (tek "marka" rengi, gradient yok)
+  static const primary = Color(0xFFFFFFFF);
+  // ESKİ glow alanı — artık düz, nötr kenarlık rengi (API uyumu için isim korundu)
+  static const primaryGlow = Color(0xFF2A2A2A);
+
+  // Fonksiyonel alarm renkleri (yalnız KAVGA/OLASI_KAVGA/ŞÜPHELİ için)
+  static const error = Color(0xFFFF3B30); // KAVGA
+  static const warning = Color(0xFFFF9500); // OLASI_KAVGA
+  static const caution = Color(0xFFFFCC00); // ŞÜPHELİ
+
+  // Nötrleştirilmiş yardımcılar (eski mavi → gri/beyaz; dekoratif renk yok)
+  static const info = Color(0xFFC4C7C8);
+  static const plate = Color(0xFFFFFFFF);
+
+  // Metin
+  static const textPrimary = Color(0xFFFFFFFF);
+  static const textSecondary = Color(0xFFC4C7C8); // on-surface-variant
+
+  // Gradient'ler kaldırıldı — geri uyumluluk için isim korundu, tek renkli (düz).
   static const bgGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
-    colors: [Color(0xFF0A0E1A), Color(0xFF111827)],
+    colors: [background, background],
   );
 
   static const primaryGradient = LinearGradient(
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
-    colors: [Color(0xFF00D4AA), Color(0xFF3498DB)],
+    colors: [primary, primary],
   );
 
   static Color forLevel(String level) {
@@ -49,13 +65,21 @@ class AppColors {
   }
 }
 
+// JetBrains Mono — plaka metni, zaman damgaları ve teknik etiketler için.
+String get monoFontFamily => GoogleFonts.jetBrainsMono().fontFamily!;
+
 ThemeData buildDarkTheme() {
+  // Stitch referansı Geist istiyor; bu google_fonts sürümünde Geist yok.
+  // En yakın eşdeğer olan Inter kullanıldı (aynı nötr-grotesk karakter, teknik okunabilirlik).
+  final baseFont = GoogleFonts.inter().fontFamily;
+
   return ThemeData(
     brightness: Brightness.dark,
     scaffoldBackgroundColor: AppColors.background,
-    fontFamily: 'Roboto',
+    fontFamily: baseFont,
     colorScheme: const ColorScheme.dark(
       primary: AppColors.primary,
+      onPrimary: Colors.black,
       surface: AppColors.surface,
       error: AppColors.error,
     ),
@@ -69,33 +93,34 @@ ThemeData buildDarkTheme() {
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.black,
+        elevation: 0,
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
         ),
       ),
     ),
     outlinedButtonTheme: OutlinedButtonThemeData(
       style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.primary,
-        side: const BorderSide(color: AppColors.primary),
+        foregroundColor: AppColors.textPrimary,
+        side: const BorderSide(color: AppColors.border),
         shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderRadius: BorderRadius.all(Radius.circular(12)),
         ),
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: const Color(0x10FFFFFF),
+      fillColor: AppColors.surface,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: AppColors.primaryGlow),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: const BorderSide(color: AppColors.primaryGlow),
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: AppColors.border),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
       ),
       labelStyle: const TextStyle(color: AppColors.textSecondary),
@@ -118,11 +143,16 @@ ThemeData buildDarkTheme() {
     ),
     dividerColor: AppColors.border,
     switchTheme: SwitchThemeData(
+      // Stitch toggle: kapalı = #161616 track + #2A2A2A kenarlık + beyaz knob;
+      //               açık  = beyaz track + siyah knob.
       thumbColor: WidgetStateProperty.resolveWith(
-        (states) => states.contains(WidgetState.selected) ? AppColors.primary : AppColors.textSecondary,
+        (states) => states.contains(WidgetState.selected) ? Colors.black : Colors.white,
       ),
       trackColor: WidgetStateProperty.resolveWith(
-        (states) => states.contains(WidgetState.selected) ? AppColors.primary.withValues(alpha: 0.4) : AppColors.surfaceVariant,
+        (states) => states.contains(WidgetState.selected) ? AppColors.primary : AppColors.card,
+      ),
+      trackOutlineColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected) ? AppColors.primary : AppColors.border,
       ),
     ),
     sliderTheme: const SliderThemeData(
@@ -134,7 +164,7 @@ ThemeData buildDarkTheme() {
 }
 
 // ---------------------------------------------------------------------------
-// Sayfa geçişi: slide + fade
+// Sayfa geçişi: slide + fade (animasyon TÜRÜ korundu)
 // ---------------------------------------------------------------------------
 Route<T> slideFadeRoute<T>(Widget page) {
   return PageRouteBuilder<T>(
@@ -158,23 +188,24 @@ Route<T> slideFadeRoute<T>(Widget page) {
 }
 
 // ---------------------------------------------------------------------------
-// Glassmorphism kart
+// Kart — düz, opak yüzey + 1px kenarlık (glow/gölge/blur YOK)
+// (Sınıf adı/API geri uyumluluk için korundu; glowColor/blur artık görselsiz.)
 // ---------------------------------------------------------------------------
 class GlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
-  final Color? glowColor;
+  final Color? glowColor; // korunuyor ama kullanılmıyor (gölge yok)
   final double borderRadius;
   final Color? fillColor;
   final Border? border;
-  final bool blur;
+  final bool blur; // korunuyor ama kullanılmıyor (blur yok)
 
   const GlassCard({
     super.key,
     required this.child,
     this.padding = const EdgeInsets.all(16),
     this.glowColor,
-    this.borderRadius = 18,
+    this.borderRadius = 16,
     this.fillColor,
     this.border,
     this.blur = false,
@@ -182,40 +213,20 @@ class GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(borderRadius);
-    final content = Container(
+    return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: fillColor ?? AppColors.card.withValues(alpha: blur ? 0.55 : 0.92),
-        borderRadius: radius,
+        color: fillColor ?? AppColors.card,
+        borderRadius: BorderRadius.circular(borderRadius),
         border: border ?? Border.all(color: AppColors.border),
-        boxShadow: glowColor != null
-            ? [
-                BoxShadow(
-                  color: glowColor!.withValues(alpha: 0.25),
-                  blurRadius: 20,
-                  spreadRadius: -2,
-                ),
-              ]
-            : null,
       ),
       child: child,
-    );
-
-    if (!blur) return content;
-
-    return ClipRRect(
-      borderRadius: radius,
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-        child: content,
-      ),
     );
   }
 }
 
 // ---------------------------------------------------------------------------
-// Tap scale + glow animasyonu
+// Tap scale animasyonu (animasyon TÜRÜ korundu)
 // ---------------------------------------------------------------------------
 class TapScale extends StatefulWidget {
   final Widget child;
@@ -247,7 +258,7 @@ class _TapScaleState extends State<TapScale> {
 }
 
 // ---------------------------------------------------------------------------
-// Staggered giriş animasyonu (aşağıdan yukarı + fade)
+// Staggered giriş animasyonu (aşağıdan yukarı + fade) — TÜR korundu
 // ---------------------------------------------------------------------------
 class StaggerItem extends StatefulWidget {
   final int index;
@@ -298,7 +309,7 @@ class _StaggerItemState extends State<StaggerItem>
 }
 
 // ---------------------------------------------------------------------------
-// Shimmer (skeleton loading)
+// Shimmer (skeleton loading) — monokrom ton (animasyon TÜRÜ korundu)
 // ---------------------------------------------------------------------------
 class ShimmerBox extends StatefulWidget {
   final double width;
@@ -345,13 +356,14 @@ class _ShimmerBoxState extends State<ShimmerBox>
           height: widget.height,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(widget.borderRadius),
+            border: Border.all(color: AppColors.border),
             gradient: LinearGradient(
               begin: Alignment(-1 - 2 * t, 0),
               end: Alignment(1 - 2 * t, 0),
               colors: const [
+                AppColors.card,
                 AppColors.surfaceVariant,
-                AppColors.primaryGlow,
-                AppColors.surfaceVariant,
+                AppColors.card,
               ],
             ),
           ),
@@ -362,7 +374,7 @@ class _ShimmerBoxState extends State<ShimmerBox>
 }
 
 // ---------------------------------------------------------------------------
-// Pulse (badge / okunmamış nokta titreşimi)
+// Pulse (badge / okunmamış nokta titreşimi) — TÜR korundu
 // ---------------------------------------------------------------------------
 class Pulse extends StatefulWidget {
   final Widget child;

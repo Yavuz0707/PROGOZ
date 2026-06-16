@@ -8,10 +8,11 @@ import '../models/plate.dart';
 import '../providers/auth_provider.dart';
 import '../providers/plates_provider.dart';
 
-// Güven skoru -> renk (yeşil >80, sarı 50-80, kırmızı <50)
+// Güven skoru -> renk. Monokrom: yüksek=beyaz, orta=nötr gri, düşük=kırmızı.
+// (Orta seviye turuncu DEĞİL; turuncu yalnız OLASI_KAVGA alarmına ayrıldı.)
 Color confidenceColor(double percent) {
   if (percent > 80) return AppColors.primary;
-  if (percent >= 50) return AppColors.warning;
+  if (percent >= 50) return AppColors.textSecondary;
   return AppColors.error;
 }
 
@@ -116,7 +117,7 @@ class _PlatesScreenState extends State<PlatesScreen> {
         textCapitalization: TextCapitalization.characters,
         decoration: InputDecoration(
           hintText: 'Plaka ara... (örn: 34ABC)',
-          prefixIcon: const Icon(Icons.search, color: AppColors.primary),
+          prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
           filled: true,
           fillColor: AppColors.card,
           isDense: true,
@@ -219,12 +220,8 @@ class _GradientAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: AppColors.primaryGlow)),
-        gradient: LinearGradient(
-          colors: [Color(0xFF111827), Color(0xFF0A0E1A)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.background,
+        border: Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: SafeArea(
         bottom: false,
@@ -319,15 +316,6 @@ class _SourceChip extends StatelessWidget {
             border: Border.all(
               color: selected ? AppColors.primary : AppColors.border,
             ),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                      color: AppColors.primary.withValues(alpha: 0.4),
-                      blurRadius: 14,
-                      spreadRadius: -2,
-                    ),
-                  ]
-                : null,
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -407,6 +395,7 @@ class _PlateCard extends StatelessWidget {
                         child: Text(
                           plate.displayText,
                           style: TextStyle(
+                            fontFamily: monoFontFamily,
                             color: plate.isReadable
                                 ? AppColors.textPrimary
                                 : AppColors.textSecondary,
@@ -532,17 +521,12 @@ class _PlaceholderImage extends StatelessWidget {
       width: 70,
       height: 70,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            AppColors.primary.withValues(alpha: 0.18),
-            AppColors.info.withValues(alpha: 0.12),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
+        color: AppColors.surfaceVariant,
         borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppColors.border),
       ),
-      child: const Icon(Icons.directions_car, color: AppColors.primary, size: 30),
+      child: const Icon(Icons.directions_car_outlined,
+          color: AppColors.textSecondary, size: 30),
     );
   }
 }
