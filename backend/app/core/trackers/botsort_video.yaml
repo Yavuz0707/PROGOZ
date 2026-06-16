@@ -1,0 +1,31 @@
+# PROGOZ - Video analiz (upload) akisina ozel BoT-SORT izleyici yapilandirmasi.
+# SADECE video_processor.py (yuklenen video analizi) bu config'i kullanir.
+# Webcam / RTSP / web yayini akislari bytetrack.yaml ile calismaya DEVAM EDER.
+#
+# Neden BoT-SORT? ByteTrack yalnizca konum/IoU eslestirir; gorsel kimlik kullanmaz.
+# BoT-SORT, IoU'ya EK olarak appearance (ReID) embedding kullanir; boylece kisi
+# yer degistirince veya kisa sure kameradan cikip girince ayni ID korunur.
+# Ultralytics 8.4.x semasi (cfg/trackers/botsort.yaml) baz alinmistir.
+#
+# Parametreler test videolari (Esnaf_Kavgas, Taekwondo) uzerinde olcumle secildi.
+# ONEMLI: Ultralytics'te match_thresh bir MESAFE/maliyet esigidir (eslesme gecerli:
+# cost <= match_thresh, bkz. trackers/utils/matching.py). Bu yuzden match_thresh'i
+# DUSURMEK eslesmeyi ZORLASTIRIR. Hizli hareket eden kisileri daha kolay eslestirmek
+# icin match_thresh YUKSELTILDI (0.8 -> 0.9). Olcum: ID churn (max_ID) belirgin azaldi.
+
+tracker_type: botsort # BoT-SORT backend (appearance + IoU)
+track_high_thresh: 0.25 # birinci asama eslesme esigi
+track_low_thresh: 0.1 # ikinci asama (dusuk skorlu) eslesme esigi
+new_track_thresh: 0.4 # 0.25 -> 0.4: dusuk skorlu/anlik tespitlerden sahte yeni track acilmasini azaltir
+track_buffer: 90 # 30 -> 90: kayip track'lar daha uzun hatirlanir (kisa sureli cikis/giris)
+match_thresh: 0.9 # 0.8 -> 0.9: maliyet esigi gevsetildi; hizli hareket/dusuk IoU'da eslesme kolaylasir
+fuse_score: True # tespit skorunu IoU/hareket ile birlestir
+
+# BoT-SORT'a ozel
+gmc_method: sparseOptFlow # global hareket telafisi (kamera/sahne hareketi icin)
+
+# ReID (gorsel kimlik) ayarlari
+proximity_thresh: 0.5 # ReID icin minimum IoU yakinligi
+appearance_thresh: 0.5 # 0.8 -> 0.5: appearance fuzyonu daha kolay devreye girer (kisa kayipta yeniden tanima)
+with_reid: True # gorsel kimlik (appearance) embedding AKTIF
+model: auto # detektorun kendi ozelliklerini kullanir; ek model indirilmez

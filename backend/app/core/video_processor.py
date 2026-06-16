@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import os
 import queue
 import threading
 from datetime import datetime
@@ -70,6 +71,9 @@ class VideoProcessor:
     def process_upload_job(self, job_id: int) -> None:
         db = SessionLocal()
         detector = get_detector()
+        # Video analiz akisina ozel izleyici (BoT-SORT + appearance) — yalniz bu akis kullanir.
+        # Webcam/RTSP/web yayini akislari detector'a tracker gecmedigi icin ByteTrack ile kalir.
+        video_tracker = os.getenv("VIDEO_ANALYSIS_TRACKER", "botsort_video.yaml") or None
         raw_output: Path | None = None
         broadcaster = AsyncBroadcaster()
 
@@ -312,7 +316,7 @@ class VideoProcessor:
                     frame_start = perf_counter()
 
                     try:
-                        detections = detector.detect_and_track(frame, int(profile.get("input_size", self.settings.input_size)))
+                        detections = detector.detect_and_track(frame, int(profile.get("input_size", self.settings.input_size)), tracker=video_tracker)
                     except Exception as exc:
                         logger.warning("Frame %d YOLO hatasi, atlaniyor: %s", frame_index, exc)
                         job.skipped_frames += 1

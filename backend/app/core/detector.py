@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from time import perf_counter
 from typing import Any
 
@@ -6,6 +7,26 @@ import cv2
 import numpy as np
 
 from app.config import get_settings
+
+# Varsayilan izleyici: ByteTrack (webcam/RTSP/web yayini akislari bunu kullanir).
+_DEFAULT_TRACKER = "bytetrack.yaml"
+# Projeye ozel tracker yapilandirmalari (or. botsort_video.yaml) buradan cozulur.
+_TRACKER_DIR = Path(__file__).parent / "trackers"
+
+
+def _resolve_tracker(name: str | None) -> str:
+    """Tracker adini Ultralytics'in kullanabilecegi bir degere cevirir.
+
+    - None/bos -> varsayilan ByteTrack.
+    - trackers/ altinda dosya varsa (or. botsort_video.yaml) tam yolu dondurur.
+    - Aksi halde adi oldugu gibi gecer (Ultralytics yerlesik bytetrack.yaml/botsort.yaml).
+    """
+    if not name:
+        return _DEFAULT_TRACKER
+    local = _TRACKER_DIR / name
+    if local.exists():
+        return str(local)
+    return name
 
 
 class PersonDetector:
@@ -44,18 +65,20 @@ class PersonDetector:
     def device_label(self) -> str:
         return "cuda:0" if self.device != "cpu" else "cpu"
 
-    def detect_and_track(self, frame: np.ndarray, input_size: int | None = None) -> list[dict[str, Any]]:
+    def detect_and_track(
+        self, frame: np.ndarray, input_size: int | None = None, tracker: str | None = None
+    ) -> list[dict[str, Any]]:
         if not self.available or self.model is None:
             self.last_inference_ms = 0.0
             return []
         start = perf_counter()
         try:
-            results = self._track(frame, input_size, self.half_enabled)
+            results = self._track(frame, input_size, self.half_enabled, tracker)
         except Exception:
             if not self.half_enabled:
                 raise
             self.half_enabled = False
-            results = self._track(frame, input_size, False)
+            results = self._track(frame, input_size, False, tracker)
         self.last_inference_ms = (perf_counter() - start) * 1000
         detections: list[dict[str, Any]] = []
         if not results:
@@ -82,11 +105,11 @@ class PersonDetector:
             detections.append(detection)
         return detections
 
-    def _track(self, frame: np.ndarray, input_size: int | None, half: bool):
+    def _track(self, frame: np.ndarray, input_size: int | None, half: bool, tracker: str | None = None):
         return self.model.track(
             frame,
             persist=True,
-            tracker="bytetrack.yaml",
+            tracker=_resolve_tracker(tracker),
             classes=[0],
             conf=self.confidence,
             imgsz=input_size or self.input_size,
