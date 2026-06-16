@@ -28,6 +28,9 @@ class PlateRead(BaseModel):
     crop_path: Optional[str] = None
     crop_url: Optional[str] = None
     bbox_json: Optional[str] = None
+    vehicle_id: Optional[str] = None
+    vehicle_color_name: Optional[str] = None
+    vehicle_color_hex: Optional[str] = None
     status: str
     recognition_source: str
     details_json: Optional[str] = None

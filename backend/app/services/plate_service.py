@@ -118,15 +118,19 @@ class PlateVoteBuffer:
     def clear_job(self, job_id: int | str) -> None:
         self._buffer.pop(job_id, None)
 
-    def flush_webcam(self, camera_id: int, db: Session) -> dict | None:
+    def flush_webcam(self, camera_id: int, db: Session, tracker=None) -> dict | None:
         """Write the accumulated webcam vote-buffer winner to DB, then clear.
 
         Called every ~300 frames and on stream stop so a live camera produces
         one consolidated DB record per 30-second window instead of one per frame.
+
+        If a VehicleTracker is supplied, the winning plate is matched to its
+        tracked vehicle so vehicle_id + color metadata are persisted too.
         """
         key = f"webcam_{camera_id}"
         winner = self.get_final_winner(key, min_votes=1)
         if winner and winner.get("text"):
+            meta = tracker.find_vehicle_for_plate(winner["text"]) if tracker else None
             try:
                 upsert_plate_detection(
                     db,
@@ -142,6 +146,9 @@ class PlateVoteBuffer:
                     seen_at=datetime.utcnow(),
                     recognition_source="webcam_vote_buffer",
                     details={"seen_count": winner["seen_count"]},
+                    vehicle_id=meta["vehicle_id"] if meta else None,
+                    vehicle_color_name=meta["color_name"] if meta else None,
+                    vehicle_color_hex=meta["color_hex"] if meta else None,
                 )
             except Exception:
                 pass
@@ -177,6 +184,9 @@ def upsert_plate_detection(
     frame_index: int | None = None,
     recognition_source: str = "local_detector_easyocr",
     details: dict[str, Any] | None = None,
+    vehicle_id: str | None = None,
+    vehicle_color_name: str | None = None,
+    vehicle_color_hex: str | None = None,
 ) -> tuple[LicensePlate, bool]:
     settings = get_settings()
     now = seen_at or datetime.utcnow()
@@ -206,6 +216,12 @@ def upsert_plate_detection(
         existing.bbox_json = bbox_json
         existing.recognition_source = recognition_source
         existing.details_json = details_json
+        if vehicle_id:
+            existing.vehicle_id = vehicle_id
+        if vehicle_color_name:
+            existing.vehicle_color_name = vehicle_color_name
+        if vehicle_color_hex:
+            existing.vehicle_color_hex = vehicle_color_hex
         if confidence >= existing.confidence:
             existing.confidence = float(confidence)
             existing.best_snapshot_path = snapshot_path or existing.best_snapshot_path
@@ -235,6 +251,9 @@ def upsert_plate_detection(
         best_snapshot_path=snapshot_path,
         crop_path=crop_path,
         bbox_json=bbox_json,
+        vehicle_id=vehicle_id,
+        vehicle_color_name=vehicle_color_name,
+        vehicle_color_hex=vehicle_color_hex,
         status=status,
         recognition_source=recognition_source,
         details_json=details_json,
@@ -305,6 +324,9 @@ def plate_payload(record: LicensePlate) -> dict:
         "crop_path": record.crop_path,
         "crop_url": public_static_path(record.crop_path),
         "bbox_json": record.bbox_json,
+        "vehicle_id": record.vehicle_id,
+        "vehicle_color_name": record.vehicle_color_name,
+        "vehicle_color_hex": record.vehicle_color_hex,
         "status": record.status,
         "recognition_source": record.recognition_source,
         "details_json": record.details_json,

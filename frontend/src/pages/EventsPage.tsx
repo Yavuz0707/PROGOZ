@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { Camera, Film, AlertTriangle, Clock, TrendingUp, Trash2 } from "lucide-react";
+import { Camera, Film, AlertTriangle, Clock, TrendingUp, Trash2, Info } from "lucide-react";
 import { api, assetUrl, unwrap } from "../api/client";
 import { SeverityBadge } from "../components/SeverityBadge";
 import type { Camera as CameraType, IncidentRecord } from "../types";
@@ -178,6 +178,15 @@ export default function EventsPage() {
         </div>
       </div>
 
+      {/* Kayit politikasi bilgi notu */}
+      <div className="flex items-start gap-2 rounded-xl border border-cyan-400/30 bg-cyan-400/8 px-4 py-2.5 text-sm text-cyan-200">
+        <Info size={16} className="mt-0.5 shrink-0 text-cyan-300" />
+        <p>
+          Sadece <span className="font-semibold">KAVGA</span> seviyesindeki olaylar burada listelenir.
+          OLASI_KAVGA ve ŞÜPHELİ tespitleri mobil bildirim olarak iletilir.
+        </p>
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
         {/* LEFT PANEL — Source List */}
         <aside className="space-y-2">
@@ -272,8 +281,19 @@ export default function EventsPage() {
           ) : filteredIncidents.length === 0 ? (
             <div className="rounded-xl border border-line bg-slate-900 p-10 text-center">
               <AlertTriangle size={32} className="mx-auto mb-3 text-slate-600" />
-              <p className="text-slate-400">Filtreye uygun olay bulunamadı</p>
-              <p className="text-sm text-slate-600 mt-1">Farklı bir kaynak veya seviye seçin</p>
+              {severityFilter === "OLASI_KAVGA" || severityFilter === "SUPHELI" ? (
+                <>
+                  <p className="text-slate-400">Bu seviyede kayıtlı olay bulunmuyor</p>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Bu seviyeler artık sadece bildirim olarak gönderiliyor.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-slate-400">Filtreye uygun olay bulunamadı</p>
+                  <p className="text-sm text-slate-600 mt-1">Farklı bir kaynak veya seviye seçin</p>
+                </>
+              )}
             </div>
           ) : (
             filteredIncidents.map((inc) => (

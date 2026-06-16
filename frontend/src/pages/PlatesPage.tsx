@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { Camera, Film, Search, X, ChevronRight, Trash2 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { Camera, Car, Film, Search, X, ChevronRight, Trash2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { assetUrl } from "../api/client";
 import { cleanupUnreadablePlates, getPlates, getPlateStats } from "../api/plates";
@@ -73,67 +74,164 @@ function confidenceColor(c: number) {
 }
 
 // ——— Detail Modal ———
-function PlateModal({ plate, cameras, onClose }: { plate: PlateRecord; cameras: CameraType[]; onClose: () => void }) {
+function PlateModal({ plate, cameras, onClose }: { plate: PlateRecord | null; cameras: CameraType[]; onClose: () => void }) {
   useEffect(() => {
+    if (!plate) return;
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
+  }, [plate, onClose]);
 
-  const sourceName = plate.source_type === "video"
+  const sourceName = plate && (plate.source_type === "video"
     ? (plate.video_filename || `Video #${plate.analysis_job_id}`)
-    : (cameras.find((c) => c.id === plate.camera_id)?.name || plate.camera_name || `Kamera #${plate.camera_id}`);
+    : (cameras.find((c) => c.id === plate.camera_id)?.name || plate.camera_name || `Kamera #${plate.camera_id}`));
+
+  const hasVehicleId = !!(plate && plate.vehicle_id);
+  const hasColor = !!(plate && plate.vehicle_color_name);
+
+  // Standard text info cards (label/value pairs).
+  const infoCards: [string, string][] = plate ? [
+    ["Ham Metin", plate.plate_text_raw || "-"],
+    ["Normalize", plate.plate_text_normalized || "-"],
+    ["Format", plate.is_valid_format ? "✓ Geçerli" : "✗ Geçersiz"],
+    ["OCR Güven", `%${Math.round(plate.ocr_confidence * 100)}`],
+    ["Tespit Güven", `%${Math.round(plate.detection_confidence * 100)}`],
+    ["Görülme", `${plate.seen_count}x`],
+    ["Kaynak", sourceName || "-"],
+    ["İlk Görülme", plate.source_type === "video" ? fmtSeconds(plate.first_seen_time_seconds) : fmtDate(plate.first_seen_at)],
+    ["Son Görülme", plate.source_type === "video" ? fmtSeconds(plate.last_seen_time_seconds) : fmtDate(plate.last_seen_at)],
+    ["Frame", plate.frame_index ? `#${plate.frame_index}` : "-"],
+    ["OCR Motoru", plate.recognition_source || "-"],
+  ] : [];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl border border-line bg-slate-900 shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-line">
-          <h3 className="font-bold text-lg text-white font-mono">{plate.plate_text_normalized || plate.plate_text_raw}</h3>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 transition">
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="p-5 space-y-4">
-          {/* Snapshot */}
-          {(plate.best_snapshot_url || plate.crop_url) && (
-            <div className="rounded-xl overflow-hidden bg-slate-800 max-h-52 flex items-center justify-center">
-              <img src={assetUrl(plate.best_snapshot_url || plate.crop_url)} className="w-full object-contain max-h-52" alt="plaka" />
+    <AnimatePresence>
+      {plate && (
+        <motion.div
+          key="plate-modal-overlay"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.2 }}
+          onClick={onClose}
+        >
+          <motion.div
+            className="w-full max-w-lg rounded-2xl border border-line bg-slate-900 shadow-2xl overflow-hidden"
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            transition={{ duration: 0.25, ease: "easeOut" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-line">
+              <h3 className="font-bold text-lg text-white font-mono">{plate.plate_text_normalized || plate.plate_text_raw}</h3>
+              <motion.button
+                onClick={onClose}
+                whileHover={{ rotate: 90, scale: 1.1 }}
+                transition={{ duration: 0.2 }}
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800"
+              >
+                <X size={18} />
+              </motion.button>
             </div>
-          )}
 
-          {/* Crop */}
-          {plate.crop_url && plate.best_snapshot_url && (
-            <div className="rounded-lg overflow-hidden bg-slate-800 h-16 flex items-center justify-center">
-              <img src={assetUrl(plate.crop_url)} className="h-full object-contain" alt="crop" />
-            </div>
-          )}
+            <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto">
+              {/* Snapshot — shared layout morph from the list thumbnail */}
+              {(plate.best_snapshot_url || plate.crop_url) && (
+                <motion.div
+                  layoutId={`plate-image-${plate.id}`}
+                  className="rounded-xl overflow-hidden bg-slate-800 max-h-52 flex items-center justify-center"
+                >
+                  <img src={assetUrl(plate.best_snapshot_url || plate.crop_url)} className="w-full object-contain max-h-52" alt="plaka" />
+                </motion.div>
+              )}
 
-          {/* Details Grid */}
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            {[
-              ["Ham Metin", plate.plate_text_raw || "-"],
-              ["Normalize", plate.plate_text_normalized || "-"],
-              ["Format", plate.is_valid_format ? "✓ Geçerli" : "✗ Geçersiz"],
-              ["Güven", `%${Math.round(plate.confidence * 100)}`],
-              ["OCR Güven", `%${Math.round(plate.ocr_confidence * 100)}`],
-              ["Tespit Güven", `%${Math.round(plate.detection_confidence * 100)}`],
-              ["Görülme", `${plate.seen_count}x`],
-              ["Kaynak", sourceName],
-              ["İlk Görülme", plate.source_type === "video" ? fmtSeconds(plate.first_seen_time_seconds) : fmtDate(plate.first_seen_at)],
-              ["Son Görülme", plate.source_type === "video" ? fmtSeconds(plate.last_seen_time_seconds) : fmtDate(plate.last_seen_at)],
-              ["Frame", plate.frame_index ? `#${plate.frame_index}` : "-"],
-              ["OCR Motoru", plate.recognition_source || "-"],
-            ].map(([label, value]) => (
-              <div key={label} className="rounded-lg bg-slate-950/60 px-3 py-2">
-                <p className="text-xs text-slate-500">{label}</p>
-                <p className="text-white font-medium truncate">{value}</p>
+              {/* Crop */}
+              {plate.crop_url && plate.best_snapshot_url && (
+                <div className="rounded-lg overflow-hidden bg-slate-800 h-16 flex items-center justify-center">
+                  <img src={assetUrl(plate.crop_url)} className="h-full object-contain" alt="crop" />
+                </div>
+              )}
+
+              {/* Confidence progress bar (animates from 0 to real value) */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-xs text-slate-500">Güven Skoru</p>
+                  <span className={`text-sm font-semibold ${confidenceColor(plate.confidence)}`}>%{Math.round(plate.confidence * 100)}</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                  <motion.div
+                    className={`h-full rounded-full ${plate.confidence >= 0.8 ? "bg-emerald-500" : plate.confidence >= 0.5 ? "bg-yellow-400" : "bg-red-500"}`}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.round(plate.confidence * 100)}%` }}
+                    transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
+                  />
+                </div>
               </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
+
+              {/* Details Grid */}
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                {/* Araç ID */}
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, delay: 0 }}
+                  className="rounded-lg bg-slate-950/60 px-3 py-2"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Car size={12} className="text-slate-500" />
+                    <p className="text-xs text-slate-500">Araç ID</p>
+                  </div>
+                  {hasVehicleId ? (
+                    <p className="text-white font-bold font-mono truncate">{plate.vehicle_id}</p>
+                  ) : (
+                    <p className="text-slate-500 italic">Tespit edilemedi</p>
+                  )}
+                </motion.div>
+
+                {/* Araç Rengi */}
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, delay: 0.03 }}
+                  className="rounded-lg bg-slate-950/60 px-3 py-2"
+                >
+                  <p className="text-xs text-slate-500">Araç Rengi</p>
+                  {hasColor ? (
+                    <div className="flex items-center gap-2">
+                      <motion.div
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: "spring", stiffness: 300, delay: 0.15 }}
+                        style={{ backgroundColor: plate.vehicle_color_hex || "#888888" }}
+                        className="w-4 h-4 rounded-full border border-white/20 shrink-0"
+                      />
+                      <p className="text-white font-medium truncate">{plate.vehicle_color_name}</p>
+                    </div>
+                  ) : (
+                    <p className="text-slate-500 italic">Tespit edilemedi</p>
+                  )}
+                </motion.div>
+
+                {infoCards.map(([label, value], i) => (
+                  <motion.div
+                    key={label}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2, delay: (i + 2) * 0.03 }}
+                    className="rounded-lg bg-slate-950/60 px-3 py-2"
+                  >
+                    <p className="text-xs text-slate-500">{label}</p>
+                    <p className="text-white font-medium truncate">{value}</p>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -387,9 +485,10 @@ export default function PlatesPage() {
                   ? (plate.video_filename || `Video #${plate.analysis_job_id}`)
                   : (cameras.find((c) => c.id === plate.camera_id)?.name || plate.camera_name || `Kamera #${plate.camera_id}`);
                 return (
-                  <div
+                  <motion.div
                     key={plate.id}
                     onClick={() => setSelectedPlate(plate)}
+                    whileTap={{ scale: 0.98 }}
                     className="relative rounded-xl border border-line bg-slate-900 p-4 text-left hover:border-slate-600 hover:bg-slate-800/60 transition group cursor-pointer"
                   >
                     {/* Delete Button */}
@@ -401,15 +500,18 @@ export default function PlatesPage() {
                       <Trash2 size={13} />
                     </button>
 
-                    {/* Crop Image */}
+                    {/* Crop Image — shared layoutId with modal for morph animation */}
                     {(plate.crop_url || plate.best_snapshot_url) && (
-                      <div className="mb-3 h-12 rounded-lg overflow-hidden bg-slate-800">
+                      <motion.div
+                        layoutId={selectedPlate?.id === plate.id ? `plate-image-${plate.id}` : undefined}
+                        className="mb-3 h-12 rounded-lg overflow-hidden bg-slate-800"
+                      >
                         <img
                           src={assetUrl(plate.crop_url || plate.best_snapshot_url)}
                           className="w-full h-full object-cover"
                           alt="plaka crop"
                         />
-                      </div>
+                      </motion.div>
                     )}
 
                     {/* Plate Text */}
@@ -447,8 +549,24 @@ export default function PlatesPage() {
                           ? fmtSeconds(plate.first_seen_time_seconds)
                           : fmtDate(plate.first_seen_at)}
                       </p>
+                      {(plate.vehicle_id || plate.vehicle_color_name) && (
+                        <p className="flex items-center gap-1.5 pt-0.5">
+                          {plate.vehicle_id && (
+                            <span className="font-mono text-slate-400">{plate.vehicle_id}</span>
+                          )}
+                          {plate.vehicle_color_name && (
+                            <span className="flex items-center gap-1">
+                              <span
+                                className="inline-block w-2.5 h-2.5 rounded-full border border-white/20"
+                                style={{ backgroundColor: plate.vehicle_color_hex || "#888888" }}
+                              />
+                              {plate.vehicle_color_name}
+                            </span>
+                          )}
+                        </p>
+                      )}
                     </div>
-                  </div>
+                  </motion.div>
                 );
               })}
             </div>
@@ -457,9 +575,7 @@ export default function PlatesPage() {
       </div>
 
       {/* Detail Modal */}
-      {selectedPlate && (
-        <PlateModal plate={selectedPlate} cameras={cameras} onClose={() => setSelectedPlate(null)} />
-      )}
+      <PlateModal plate={selectedPlate} cameras={cameras} onClose={() => setSelectedPlate(null)} />
 
       {/* Confirm Delete Modal */}
       {confirmDeleteId !== null && (

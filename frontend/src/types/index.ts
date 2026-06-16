@@ -109,6 +109,9 @@ export type PlateRecord = {
   best_snapshot_url?: string;
   crop_url?: string;
   bbox_json?: string;
+  vehicle_id?: string | null;
+  vehicle_color_name?: string | null;
+  vehicle_color_hex?: string | null;
   status: "valid" | "uncertain" | "ignored";
   recognition_source?: string;
   details_json?: string;

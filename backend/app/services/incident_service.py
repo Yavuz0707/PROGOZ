@@ -1,4 +1,5 @@
 import json
+import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,31 @@ from app.utils.file_utils import public_static_path
 
 
 SEVERITY_ORDER = {"NORMAL": 0, "SUPHELI": 1, "OLASI_KAVGA": 2, "KAVGA": 3}
+
+
+def _merge_window_seconds() -> float:
+    """Ayni kaynaktan kisa araliklarla gelen tespitleri tek incident'te birlestirme penceresi."""
+    try:
+        return float(os.getenv("INCIDENT_MERGE_WINDOW_SECONDS", "60"))
+    except (TypeError, ValueError):
+        return 60.0
+
+
+def _recorded_levels() -> set[str]:
+    """DB'ye yazilacak (Olaylar listesinde gorunecek) seviyeler.
+
+    Varsayilan: sadece KAVGA. OLASI_KAVGA/SUPHELI yalnizca bildirim olarak
+    iletilir, incident kaydi olusturulmaz. INCIDENT_RECORD_LEVELS ile genisletilebilir
+    (ornek: "KAVGA,OLASI_KAVGA").
+    """
+    raw = os.getenv("INCIDENT_RECORD_LEVELS", "KAVGA")
+    levels = {item.strip().upper() for item in raw.split(",") if item.strip()}
+    return levels or {"KAVGA"}
+
+
+def should_persist_incident(level: str) -> bool:
+    """Bu seviyedeki tespit DB'ye yazilmali (ve snapshot kaydedilmeli) mi?"""
+    return (level or "").upper() in _recorded_levels()
 
 
 @dataclass
@@ -55,6 +81,11 @@ class IncidentTracker:
         self.video_filename = video_filename
         self.fps = fps or 25.0
         self.active: IncidentCandidate | None = None
+        # DB row for the currently open candidate (once confirmed + persisted).
+        # While the merge window is open, new detections update this same row
+        # instead of creating new incidents.
+        self.active_incident: Incident | None = None
+        self.merge_window_seconds = _merge_window_seconds()
         self.created: list[Incident] = []
 
     def update(
@@ -69,38 +100,78 @@ class IncidentTracker:
         time_seconds = frame_index / self.fps if self.source_type == "video" else None
         now = timestamp or datetime.utcnow()
         is_above = score >= self.settings.incident_min_score_to_start and severity != "NORMAL"
-        if is_above and self.active is None:
+
+        result: Incident | None = None
+
+        # Merge penceresi dolduysa acik incident'i kapat (artik guncellenemez).
+        if self.active is not None and self._merge_window_expired(self.active, time_seconds, now):
+            result = self._close_active()
+
+        if not is_above:
+            return result
+
+        # Acik bir incident yoksa (veya yeni kapandiysa) yeni aday baslat.
+        if self.active is None:
             self.active = IncidentCandidate(
                 source_type=self.source_type,
                 start_frame=frame_index if self.source_type == "video" else None,
                 start_time_seconds=time_seconds,
                 started_at=now if self.source_type == "camera" else None,
             )
-        if self.active is None:
-            return None
 
-        if is_above:
-            self._add_sample(self.active, frame_index, time_seconds, now, score, severity, score_info, frame)
-            return None
-
-        grace = self._grace_expired(self.active, time_seconds, now)
-        if grace:
-            return self.close()
-        return None
+        self._add_sample(self.active, frame_index, time_seconds, now, score, severity, score_info, frame)
+        persisted = self._persist_or_update_active()
+        if persisted is not None and result is None:
+            result = persisted
+        return result
 
     def close(self) -> Incident | None:
-        if self.active is None:
-            return None
-        candidate = self.active
-        self.active = None
-        if not self._is_confirmed(candidate):
-            return None
-        incident = self._create_incident(candidate)
-        self.created.append(incident)
-        return incident
+        """Acik incident'i kapat; henuz kaydedilmediyse (ama onaylandiysa) kaydet."""
+        return self._close_active()
 
     def finalize(self) -> Incident | None:
-        return self.close()
+        return self._close_active()
+
+    def _persist_or_update_active(self) -> Incident | None:
+        """Aday onaylandiysa ilk kez DB'ye yaz, sonraki tespitlerde ayni satiri guncelle.
+
+        Returns the incident only when it is first created (so the caller can
+        broadcast it once); subsequent in-place updates return None.
+        """
+        candidate = self.active
+        if candidate is None:
+            return None
+        if self.active_incident is None:
+            if not self._is_confirmed(candidate):
+                return None
+            # Seviye bazli kayit politikasi: yalnizca RECORDED_LEVELS (orn. KAVGA)
+            # DB'ye yazilir. Aday SUPHELI/OLASI_KAVGA olarak baslayip KAVGA'ya
+            # yukseldiginde, o ana kadar birikmis timeline ile birlikte kaydedilir.
+            if not should_persist_incident(candidate.severity):
+                return None
+            incident = self._create_incident(candidate)
+            self.active_incident = incident
+            self.created.append(incident)
+            return incident
+        self._update_incident_row(candidate)
+        return None
+
+    def _close_active(self) -> Incident | None:
+        candidate = self.active
+        self.active = None
+        incident_to_return: Incident | None = None
+        if candidate is not None:
+            if self.active_incident is None:
+                # Hic kaydedilmemis; onaylandiysa VE kaydedilebilir seviyedeyse simdi kaydet.
+                if self._is_confirmed(candidate) and should_persist_incident(candidate.severity):
+                    incident = self._create_incident(candidate)
+                    self.created.append(incident)
+                    incident_to_return = incident
+            else:
+                # Zaten kaydedilmis ve canli guncellenmis; son durumu yaz.
+                self._update_incident_row(candidate)
+        self.active_incident = None
+        return incident_to_return
 
     def _add_sample(
         self,
@@ -135,14 +206,18 @@ class IncidentTracker:
             candidate.best_snapshot_score = float(score)
             candidate.best_frame = frame.copy() if frame is not None else None
 
-    def _grace_expired(self, candidate: IncidentCandidate, time_seconds: float | None, now: datetime) -> bool:
+    def _merge_window_expired(self, candidate: IncidentCandidate, time_seconds: float | None, now: datetime) -> bool:
+        """Son tespitten bu yana merge penceresi kadar sure gectiyse True.
+
+        Pencere dolmadigi surece yeni tespitler ayni incident'e birlesir.
+        """
         if self.source_type == "video":
             if candidate.last_above_time is None or time_seconds is None:
                 return False
-            return time_seconds - candidate.last_above_time >= self.settings.incident_end_grace_seconds
+            return time_seconds - candidate.last_above_time >= self.merge_window_seconds
         if candidate.last_above_at is None:
             return False
-        return (now - candidate.last_above_at).total_seconds() >= self.settings.incident_end_grace_seconds
+        return (now - candidate.last_above_at).total_seconds() >= self.merge_window_seconds
 
     def _is_confirmed(self, candidate: IncidentCandidate) -> bool:
         frames = len(candidate.scores)
@@ -192,6 +267,35 @@ class IncidentTracker:
         self.db.refresh(incident)
         return incident
 
+    def _update_incident_row(self, candidate: IncidentCandidate) -> None:
+        """Acik incident satirini birlesen tespitlere gore yerinde guncelle."""
+        incident = self.active_incident
+        if incident is None:
+            return
+        incident.severity = candidate.severity
+        incident.end_frame = candidate.end_frame
+        incident.end_time_seconds = candidate.end_time_seconds
+        incident.ended_at = candidate.ended_at
+        incident.duration_seconds = round(self._duration(candidate), 3)
+        incident.max_score = round(candidate.max_score, 3)
+        incident.avg_score = round(sum(candidate.scores) / max(len(candidate.scores), 1), 3)
+        incident.involved_track_ids_json = json.dumps(sorted(candidate.involved_ids))
+        incident.score_timeline_json = json.dumps(candidate.timeline)
+        incident.details_json = json.dumps(candidate.details)
+        # Daha yuksek skorlu kare geldiyse snapshot'i degistir, eskisini diskten sil.
+        if (
+            self.settings.save_best_snapshot
+            and candidate.best_frame is not None
+            and round(candidate.best_snapshot_score, 3) > round(incident.best_snapshot_score or 0.0, 3)
+        ):
+            new_path = self._save_best_snapshot(candidate)
+            if new_path is not None:
+                self._delete_snapshot_file(incident.best_snapshot_path)
+                incident.best_snapshot_path = str(new_path)
+                incident.best_snapshot_score = round(candidate.best_snapshot_score, 3)
+        self.db.commit()
+        self.db.refresh(incident)
+
     def _save_best_snapshot(self, candidate: IncidentCandidate) -> Path | None:
         if not self.settings.save_best_snapshot or candidate.best_frame is None:
             return None
@@ -201,6 +305,16 @@ class IncidentTracker:
         path = self.settings.snapshot_dir / f"incident_{prefix}_{ident}_{frame}_{int(candidate.max_score * 10)}.jpg"
         cv2.imwrite(str(path), candidate.best_frame)
         return path
+
+    def _delete_snapshot_file(self, path: str | None) -> None:
+        if not path:
+            return
+        try:
+            file_path = Path(path)
+            if file_path.exists() and file_path.is_file():
+                file_path.unlink()
+        except OSError:
+            pass
 
 
 def incident_payload(incident: Incident) -> dict:

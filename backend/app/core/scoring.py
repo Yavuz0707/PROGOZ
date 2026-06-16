@@ -1,6 +1,21 @@
 from dataclasses import dataclass, field
 from typing import Dict, Iterable, Tuple
 import math
+import os
+
+
+def _env_flag(name: str, default: bool) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
 
 
 DEFAULT_PAIR_WEIGHTS = {
@@ -74,6 +89,33 @@ def weighted_score(criteria: Dict[str, float], weights: Dict[str, float] | None 
             value = value / 100.0
         total += clamp(value) * weight
     return clamp_score(calibrated_score(total / total_weight) * sensitivity)
+
+
+def apply_classifier_suppression(
+    current_score: float,
+    heuristic_score: float,
+    classifier_probability: float | None,
+    olasi_kavga_threshold: float = 55.0,
+) -> float:
+    """Heuristic skor ile fight classifier olasiligini birlestirerek yanlis alarmi azalt.
+
+    - classifier dusuk (< SUPPRESSION_THRESHOLD) iken heuristic OLASI_KAVGA esigini
+      asiyorsa skor bastirilir (heuristic * 0.6 seviyesine cekilir).
+    - classifier yuksek (>= CONFIRMATION_THRESHOLD) ise skor en az 75'e yukseltilir.
+    - Diger durumlarda mevcut skor (ornegin fuse_classifier_score ciktisi) korunur.
+
+    CLASSIFIER_SUPPRESSION_ENABLED=false ise veya classifier olasiligi yoksa
+    mevcut skor hic degistirilmeden dondurulur (geriye donuk uyumluluk).
+    """
+    if classifier_probability is None or not _env_flag("CLASSIFIER_SUPPRESSION_ENABLED", True):
+        return current_score
+    suppression_threshold = _env_float("CLASSIFIER_SUPPRESSION_THRESHOLD", 0.35)
+    confirmation_threshold = _env_float("CLASSIFIER_CONFIRMATION_THRESHOLD", 0.7)
+    if classifier_probability >= confirmation_threshold:
+        return max(current_score, 75.0)
+    if classifier_probability < suppression_threshold and heuristic_score >= olasi_kavga_threshold:
+        return min(current_score, heuristic_score * 0.6)
+    return current_score
 
 
 def alarm_level(score: float, consecutive: int, thresholds: dict[str, float] | None = None, consecutive_frames: dict[str, int] | None = None) -> str:

@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Globe, Play, Square, Trash2, Wifi, WifiOff } from "lucide-react";
 import { api, unwrap } from "../api/client";
 import { SeverityBadge } from "../components/SeverityBadge";
 import { useWebSocket } from "../hooks/useWebSocket";
 import type { Camera } from "../types";
+
+type OverlayBox = { id: number; x1: number; y1: number; x2: number; y2: number; conf: number };
 
 type LiveMsg = {
   type: string;
@@ -11,9 +13,26 @@ type LiveMsg = {
   fps?: number;
   latency_ms?: number;
   alarm_level?: string;
+  level?: string;
   score?: number;
   plate?: string;
   confidence?: number;
+  // overlay_update (web stream only)
+  boxes?: OverlayBox[];
+  plates?: { plate: string; confidence: number }[];
+  frame_w?: number;
+  frame_h?: number;
+  timestamp?: number;
+};
+
+type Overlay = { boxes: OverlayBox[]; level: string; score: number; frameW: number; frameH: number };
+
+// Bounding box renkleri (seviyeye gore)
+const LEVEL_COLORS: Record<string, string> = {
+  KAVGA: "#ef4444", // kirmizi
+  OLASI_KAVGA: "#f97316", // turuncu
+  SUPHELI: "#eab308", // sari
+  NORMAL: "#22c55e", // yesil
 };
 
 export default function WebStreamPage() {
@@ -30,12 +49,99 @@ export default function WebStreamPage() {
   const { lastMessage, connected } = useWebSocket<LiveMsg>(
     activeCam ? `/ws/live/${activeCam.id}` : null
   );
-  const level = lastMessage?.alarm_level ?? "NORMAL";
+
+  // Analyzer outputs (web stream): boxes/score come via "overlay_update",
+  // fps/latency via "frame_status". Both are tracked so the panel + canvas stay in sync.
+  const [overlay, setOverlay] = useState<Overlay | null>(null);
+  const [status, setStatus] = useState<{ fps?: number; latency_ms?: number; level?: string; score?: number }>({});
+  const videoWrapRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [wrapSize, setWrapSize] = useState({ w: 0, h: 0 });
+
+  const level = overlay?.level ?? status.level ?? lastMessage?.alarm_level ?? "NORMAL";
+  const score = overlay?.score ?? status.score ?? 0;
 
   // Load existing web cameras on mount
   useEffect(() => {
     loadSavedCams();
   }, []);
+
+  // Route incoming WS messages by type (overlay_update / frame_status)
+  useEffect(() => {
+    if (!lastMessage) return;
+    if (lastMessage.type === "overlay_update") {
+      setOverlay({
+        boxes: lastMessage.boxes ?? [],
+        level: lastMessage.level ?? "NORMAL",
+        score: lastMessage.score ?? 0,
+        frameW: lastMessage.frame_w ?? 0,
+        frameH: lastMessage.frame_h ?? 0,
+      });
+    } else if (lastMessage.type === "frame_status") {
+      setStatus({
+        fps: lastMessage.fps,
+        latency_ms: lastMessage.latency_ms,
+        level: lastMessage.alarm_level,
+        score: lastMessage.score,
+      });
+    }
+  }, [lastMessage]);
+
+  // Clear stale overlay when the stream stops or the camera changes
+  useEffect(() => {
+    if (!isRunning) {
+      setOverlay(null);
+    }
+  }, [isRunning, activeCam]);
+
+  // Track the rendered size of the video container (for canvas coordinate scaling)
+  useEffect(() => {
+    const el = videoWrapRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const e of entries) {
+        setWrapSize({ w: e.contentRect.width, h: e.contentRect.height });
+      }
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [isRunning, activeCam]);
+
+  // Draw bounding boxes onto the transparent overlay canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const { w: CW, h: CH } = wrapSize;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    canvas.width = CW;
+    canvas.height = CH;
+    ctx.clearRect(0, 0, CW, CH);
+    if (!overlay || !overlay.frameW || !overlay.frameH || CW === 0 || CH === 0) return;
+    // The MJPEG <img> uses object-contain: compute the letterboxed content rect.
+    const scale = Math.min(CW / overlay.frameW, CH / overlay.frameH);
+    const contentW = overlay.frameW * scale;
+    const contentH = overlay.frameH * scale;
+    const offX = (CW - contentW) / 2;
+    const offY = (CH - contentH) / 2;
+    const color = LEVEL_COLORS[overlay.level] ?? LEVEL_COLORS.NORMAL;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = color;
+    ctx.font = "12px monospace";
+    for (const b of overlay.boxes) {
+      const x = offX + b.x1 * scale;
+      const y = offY + b.y1 * scale;
+      const w = (b.x2 - b.x1) * scale;
+      const h = (b.y2 - b.y1) * scale;
+      ctx.strokeRect(x, y, w, h);
+      const label = `ID ${b.id}`;
+      const tw = ctx.measureText(label).width;
+      ctx.fillStyle = color;
+      ctx.fillRect(x, Math.max(0, y - 15), tw + 6, 15);
+      ctx.fillStyle = "#000";
+      ctx.fillText(label, x + 3, Math.max(11, y - 4));
+    }
+  }, [overlay, wrapSize]);
 
   function loadSavedCams() {
     unwrap<Camera[]>(api.get("/cameras"))
@@ -304,13 +410,21 @@ export default function WebStreamPage() {
           )}
 
           <div className="grid gap-4 xl:grid-cols-[1fr_300px]">
-            <div className="panel aspect-video overflow-hidden bg-black">
+            <div ref={videoWrapRef} className="panel relative aspect-video overflow-hidden bg-black">
               {isRunning ? (
-                <img
-                  className="h-full w-full object-contain"
-                  src={`/api/stream/${activeCam.id}/mjpeg`}
-                  alt="Canli yayin"
-                />
+                <>
+                  {/* Thread 1: ham MJPEG video — analizden bagimsiz, akici akar */}
+                  <img
+                    className="h-full w-full object-contain"
+                    src={`/api/stream/${activeCam.id}/mjpeg`}
+                    alt="Canli yayin"
+                  />
+                  {/* Thread 2 ciktisi: overlay_update ile gelen bounding box'lar */}
+                  <canvas
+                    ref={canvasRef}
+                    className="pointer-events-none absolute inset-0 h-full w-full"
+                  />
+                </>
               ) : (
                 <div className="grid h-full place-items-center text-sm text-slate-500">
                   Yayin durduruldu
@@ -329,16 +443,16 @@ export default function WebStreamPage() {
                 <SeverityBadge value={level} />
               </div>
               <p className="text-5xl font-semibold text-white">
-                {(lastMessage?.score ?? 0).toFixed(1)}
+                {score.toFixed(1)}
               </p>
               <dl className="mt-5 space-y-3 text-sm">
                 <div className="flex justify-between">
                   <dt className="text-slate-400">FPS</dt>
-                  <dd>{lastMessage?.fps ?? "-"}</dd>
+                  <dd>{status.fps ?? "-"}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-slate-400">Gecikme</dt>
-                  <dd>{lastMessage?.latency_ms != null ? `${lastMessage.latency_ms} ms` : "-"}</dd>
+                  <dd>{status.latency_ms != null ? `${status.latency_ms} ms` : "-"}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-slate-400">Kaynak</dt>

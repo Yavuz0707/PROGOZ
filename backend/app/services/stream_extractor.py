@@ -23,6 +23,23 @@ def _strip_ansi(text: str) -> str:
     return _ANSI_RE.sub("", text)
 
 
+# Dogrudan oynatilabilir akis uzantilari — bunlar icin yt-dlp'ye gerek yok.
+_DIRECT_STREAM_SUFFIXES = (".m3u8", ".mjpg", ".mjpeg")
+
+
+def is_direct_stream_url(url: str) -> bool:
+    """URL dogrudan oynatilabilir bir akis mi (.m3u8 / .mjpg)?
+
+    Boyle URL'ler cv2.VideoCapture ile dogrudan acilir; yt-dlp cikarimi yapilmaz.
+    youtube.com / youtu.be gibi platform/sayfa URL'leri False doner ve yt-dlp kullanir.
+    Sorgu/parca (?token=..., #...) eklerine ragmen dogru calisir.
+    """
+    if not url:
+        return False
+    path = url.split("?", 1)[0].split("#", 1)[0].lower().rstrip("/")
+    return path.endswith(_DIRECT_STREAM_SUFFIXES)
+
+
 def _do_extract(page_url: str) -> str:
     """Blocking yt-dlp extraction — always called via _extract_timeout."""
     import yt_dlp
@@ -65,6 +82,11 @@ def extract_stream_url(page_url: str) -> str:
     If yt-dlp hangs (unsupported site, bot protection, etc.) the call
     returns an error instead of blocking the API forever.
     """
+    # Dogrudan akis URL'leri (.m3u8 / .mjpg) oldugu gibi dondurulur — yt-dlp atlanir.
+    if is_direct_stream_url(page_url):
+        logger.info("Dogrudan akis URL'si, yt-dlp atlandi: %s", page_url[:80])
+        return page_url
+
     try:
         import yt_dlp  # noqa: F401
     except ImportError:

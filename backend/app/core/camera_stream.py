@@ -1,24 +1,46 @@
 import asyncio
 import collections
 import logging
+import os
 import threading
 import time
 from datetime import datetime
 
 import cv2
+import numpy as np
 
-# Each worker thread gets its own event loop so we never create/destroy one per broadcast.
-_thread_loop: threading.local = threading.local()
+class _BackgroundBroadcaster:
+    """One always-running event loop in a daemon thread for fire-and-forget WS broadcasts.
+
+    Keeps WebSocket I/O off the frame analysis/delivery hot loop so a slow client can
+    never stall frame processing. Coroutines are scheduled without waiting for them.
+    """
+
+    def __init__(self) -> None:
+        self._loop = asyncio.new_event_loop()
+        threading.Thread(target=self._run, daemon=True).start()
+
+    def _run(self) -> None:
+        asyncio.set_event_loop(self._loop)
+        self._loop.run_forever()
+
+    def submit(self, coro) -> None:
+        try:
+            asyncio.run_coroutine_threadsafe(coro, self._loop)
+        except Exception:
+            # Scheduling must never break the stream loop.
+            try:
+                coro.close()
+            except Exception:
+                pass
 
 
-def _run_async(coro) -> None:
-    """Run a coroutine from a sync thread using a cached per-thread event loop."""
-    loop = getattr(_thread_loop, "loop", None)
-    if loop is None or loop.is_closed():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        _thread_loop.loop = loop
-    loop.run_until_complete(coro)
+_broadcaster = _BackgroundBroadcaster()
+
+
+def _broadcast_bg(coro) -> None:
+    """Schedule a WS broadcast without blocking the caller (frame delivery path)."""
+    _broadcaster.submit(coro)
 
 from app.config import get_settings
 from app.core.alarm_manager import AlarmManager, cap_level
@@ -26,16 +48,149 @@ from app.core.detector import get_detector
 from app.core.fight_classifier import FightClipBuffer, fuse_classifier_score, get_fight_classifier
 from app.core.motion_analyzer import MotionAnalyzer
 from app.core.performance_monitor import PerformanceMonitor
+from app.core.scoring import apply_classifier_suppression
 from app.core.plate_recognition_pipeline import get_plate_pipeline
 from app.database import SessionLocal
 from app.models.camera import Camera
 from app.services.event_service import create_event
 from app.services.incident_service import IncidentTracker, incident_payload
 from app.services.plate_service import plate_vote_buffer
+from app.services.vehicle_tracker import VehicleTracker, expand_bbox_crop
 from app.services.websocket_manager import manager
 from app.utils.file_utils import public_static_path
 
 logger = logging.getLogger("progoz.camera_stream")
+
+
+# ── Web Yayini (external/YouTube stream) icin opsiyonel ONNX pose detektoru ───────────
+# SADECE source_type == "web" akisini etkiler. Webcam/RTSP/video analizi paylasilan
+# PyTorch detektorunu (get_detector singleton'i) kullanmaya devam eder.
+def _web_stream_use_onnx_pose() -> bool:
+    return os.getenv("WEB_STREAM_USE_ONNX_POSE", "false").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _web_onnx_pose_path() -> str:
+    return os.getenv("WEB_STREAM_ONNX_POSE_PATH", "ml/models/pose/yolov8n-pose.onnx")
+
+
+class _ByteTrackInput:
+    """Ultralytics BYTETracker.update() icin Results benzeri hafif sarmalayici.
+
+    Tracker yalnizca .conf / .xywh (center format) / .cls ve boolean-maske ile
+    indekslemeye ihtiyac duyar. ByteTrack koduna DOKUNULMAZ.
+    """
+
+    def __init__(self, xywh: np.ndarray, conf: np.ndarray, cls: np.ndarray) -> None:
+        self.xywh = xywh
+        self.conf = conf
+        self.cls = cls
+
+    def __len__(self) -> int:
+        return int(len(self.conf))
+
+    def __getitem__(self, idx) -> "_ByteTrackInput":
+        return _ByteTrackInput(self.xywh[idx], self.conf[idx], self.cls[idx])
+
+
+class _OnnxWebDetector:
+    """OnnxPoseDetector + ByteTrack'i, PersonDetector.detect_and_track ile ayni
+    arayuzde sunan drop-in sarmalayici (sadece web yayini akisinda kullanilir).
+
+    detect_and_track() ciktisi PyTorch detektoruyle birebir ayni formattadir:
+        {"track_id", "bbox":[x1,y1,x2,y2], "confidence", "keypoints":[{x,y,confidence}*17]}
+    annotate() cizimi paylasilan PyTorch detektore delege edilir (model gerektirmez).
+    """
+
+    def __init__(self, onnx_detector, annotate_source) -> None:
+        self._onnx = onnx_detector
+        self._annotate_source = annotate_source
+        self.available = bool(onnx_detector.available)
+        self.model_name = onnx_detector.model_path
+        self.last_inference_ms = 0.0
+        self._tracker = self._make_tracker()
+
+    @staticmethod
+    def _make_tracker():
+        from types import SimpleNamespace
+
+        from ultralytics.trackers.byte_tracker import BYTETracker
+
+        # bytetrack.yaml varsayilanlari (PyTorch yolundaki tracker="bytetrack.yaml" ile ayni)
+        args = SimpleNamespace(
+            track_high_thresh=0.25,
+            track_low_thresh=0.1,
+            new_track_thresh=0.25,
+            track_buffer=30,
+            match_thresh=0.8,
+            fuse_score=True,
+        )
+        return BYTETracker(args)
+
+    @property
+    def device_label(self) -> str:
+        return self._onnx.device_label
+
+    def detect_and_track(self, frame, input_size=None):
+        result = self._onnx.detect(frame)
+        self.last_inference_ms = self._onnx.last_inference_ms
+        boxes = result.get("boxes") or []
+        keypoints = result.get("keypoints") or []
+        if not boxes:
+            return []
+        boxes_np = np.asarray(boxes, dtype=np.float32)  # (N,6): x1,y1,x2,y2,conf,cls
+        xyxy = boxes_np[:, :4]
+        conf = boxes_np[:, 4]
+        cls = boxes_np[:, 5]
+        # xyxy -> xywh (center) — ByteTrack center-format bekliyor
+        cxcywh = np.empty_like(xyxy)
+        cxcywh[:, 0] = (xyxy[:, 0] + xyxy[:, 2]) / 2.0
+        cxcywh[:, 1] = (xyxy[:, 1] + xyxy[:, 3]) / 2.0
+        cxcywh[:, 2] = xyxy[:, 2] - xyxy[:, 0]
+        cxcywh[:, 3] = xyxy[:, 3] - xyxy[:, 1]
+        try:
+            tracks = self._tracker.update(_ByteTrackInput(cxcywh, conf, cls), frame)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("ByteTrack update hatasi (web onnx): %s", exc)
+            return []
+        detections: list[dict] = []
+        if tracks is None or len(tracks) == 0:
+            return detections
+        for row in tracks:
+            # row: [x1, y1, x2, y2, track_id, score, cls, det_idx]
+            det = {
+                "track_id": int(row[4]),
+                "bbox": [int(row[0]), int(row[1]), int(row[2]), int(row[3])],
+                "confidence": float(row[5]),
+            }
+            det_idx = int(row[7])
+            if 0 <= det_idx < len(keypoints):
+                det["keypoints"] = [
+                    {"x": float(p[0]), "y": float(p[1]), "confidence": float(p[2])}
+                    for p in keypoints[det_idx]
+                ]
+            detections.append(det)
+        return detections
+
+    def annotate(self, *args, **kwargs):
+        return self._annotate_source.annotate(*args, **kwargs)
+
+
+def _build_web_onnx_detector(annotate_source) -> "_OnnxWebDetector | None":
+    """Web yayini icin direkt ONNX Runtime pose detektoru + ByteTrack sarmalayici olustur.
+
+    Paylasilan get_detector() singleton'ina DOKUNMAZ; ByteTrack durumu bu worker'a
+    ozeldir. Model yoksa/yuklenemezse None doner (cagiran PyTorch'a geri duser).
+    annotate_source: cizim icin kullanilacak PyTorch detektoru (model gerektirmez).
+    """
+    from app.services.onnx_pose_detector import build_onnx_pose_detector
+
+    onnx_detector = build_onnx_pose_detector(
+        _web_onnx_pose_path(),
+        conf=get_settings().confidence_threshold,
+    )
+    if onnx_detector is None:
+        return None
+    return _OnnxWebDetector(onnx_detector, annotate_source)
 
 
 class _FrameReader:
@@ -46,14 +201,23 @@ class _FrameReader:
     preventing the main thread from freezing while waiting for the next segment.
     """
 
-    def __init__(self, cap: cv2.VideoCapture) -> None:
+    def __init__(self, cap: cv2.VideoCapture, *, live_drain: bool = True) -> None:
         self._cap = cap
         self._buf: collections.deque = collections.deque(maxlen=1)
         self._seq = 0  # increments on every new frame
         self._eof = False
         self._running = True
-        # Rate-limit reading to source FPS so HLS frames aren't consumed faster
-        # than real-time (which would cause 5-10x fast-forward effect).
+        # Detect live stream vs finite VOD. For finite files CAP_PROP_FRAME_COUNT is
+        # positive; for live HLS/RTSP it is 0 or negative.
+        frame_count = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+        is_live = frame_count is None or frame_count <= 0
+        # VOD: rate-limit reading to source FPS so frames aren't consumed faster than
+        # real-time (which would cause a 5-10x fast-forward effect).
+        # Live (when live_drain): drain as fast as frames arrive and keep only the latest,
+        # so the display always shows the freshest frame instead of a buffered/stale one.
+        # cap.read() on a live source blocks until the next real-time frame, so this does
+        # not busy-spin and does not change analysis frequency/accuracy.
+        self._rate_limited = not (live_drain and is_live)
         src_fps = cap.get(cv2.CAP_PROP_FPS)
         self._frame_interval = 1.0 / max(1.0, min(src_fps or 25.0, 60.0))
         self._thread = threading.Thread(target=self._loop, daemon=True)
@@ -66,10 +230,11 @@ class _FrameReader:
             if ret:
                 self._buf.append(frame)
                 self._seq += 1
-                elapsed = time.monotonic() - t0
-                wait = self._frame_interval - elapsed
-                if wait > 0:
-                    time.sleep(wait)
+                if self._rate_limited:
+                    elapsed = time.monotonic() - t0
+                    wait = self._frame_interval - elapsed
+                    if wait > 0:
+                        time.sleep(wait)
             else:
                 self._eof = True
                 break
@@ -116,6 +281,8 @@ class CameraStreamWorker:
         self._last_score: float = 0.0
         self._last_level: str = "NORMAL"
         self._annotated_at: float = 0.0  # monotonic time of last annotated frame
+        # Web stream only: most recent plate detections for the overlay_update message.
+        self._web_recent_plates: list[dict] = []
 
     def start(self) -> None:
         self.running = True
@@ -168,25 +335,53 @@ class CameraStreamWorker:
             elapsed = time.monotonic() - t0
             time.sleep(max(0.008, _TARGET_DT - elapsed))
 
+    def _run_web_display(self, reader: "_FrameReader") -> None:
+        """Web yayini icin SADELESTIRILMIS ham gosterim thread'i (Thread 1 ciktisi).
+
+        Analizden TAMAMEN bagimsiz: en guncel ham frame'i ~30 FPS'te JPEG'e cevirip
+        MJPEG endpoint'ine verir. Frame uzerine HICBIR SEY cizmez — bounding box'lar,
+        skor ve seviye frontend canvas'inda 'overlay_update' mesajiyla cizilir.
+        Boylece analiz ~1 FPS'te calissa bile video akici kalir (donma olmaz).
+
+        SADECE source_type == "web" akisinda kullanilir; webcam/RTSP _run_display
+        ile calismaya devam eder.
+        """
+        _TARGET_DT = 1.0 / 30  # ~30 FPS ham gorüntü hedefi
+        while self.running and not reader.eof:
+            t0 = time.monotonic()
+            frame = reader.get_latest()  # thread-safe latest-frame handoff (deque maxlen=1)
+            if frame is not None:
+                ok, enc = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                if ok:
+                    self.latest_jpeg = enc.tobytes()
+            elapsed = time.monotonic() - t0
+            time.sleep(max(0.005, _TARGET_DT - elapsed))
+
     def _open_capture(self, db) -> cv2.VideoCapture | None:
         """
         Open VideoCapture for the current source.
         On reconnections, web cameras re-run yt-dlp to get a fresh URL
-        (extracted URLs often have short-lived auth tokens).
+        (extracted URLs often have short-lived auth tokens) — UNLESS the URL is a
+        direct stream (.m3u8 / .mjpg), in which case it is opened as-is (no yt-dlp).
         First open uses the URL already extracted by camera_routes.py.
         """
         source = self.source
         if not self._is_first_open:
             camera = db.get(Camera, self.camera_id)
             if camera and camera.source_type == "web" and camera.rtsp_url:
-                try:
-                    from app.services.stream_extractor import extract_stream_url
-                    source = extract_stream_url(camera.rtsp_url)
+                from app.services.stream_extractor import extract_stream_url, is_direct_stream_url
+                if is_direct_stream_url(camera.rtsp_url):
+                    # Dogrudan akis: yt-dlp kullanma, URL'yi dogrudan ac.
+                    source = camera.rtsp_url
                     self.source = source
-                    logger.info("Web stream URL yenilendi camera_id=%s", self.camera_id)
-                except Exception as exc:
-                    logger.warning("Web stream URL alinamadi camera_id=%s: %s", self.camera_id, exc)
-                    return None
+                else:
+                    try:
+                        source = extract_stream_url(camera.rtsp_url)
+                        self.source = source
+                        logger.info("Web stream URL yenilendi camera_id=%s", self.camera_id)
+                    except Exception as exc:
+                        logger.warning("Web stream URL alinamadi camera_id=%s: %s", self.camera_id, exc)
+                        return None
         self._is_first_open = False
 
         cap = cv2.VideoCapture(source)
@@ -210,7 +405,27 @@ class CameraStreamWorker:
         plate_enabled = bool(camera and camera.plate_recognition_enabled)
         plate_interval = max(1, int(camera.plate_frame_interval if camera else self.settings.plate_frame_interval("realtime")))
         camera_name = camera.name if camera else None
+
+        # Web Yayini (external stream) icin opsiyonel ONNX pose modeli.
+        # Yalnizca source_type == "web" + flag acik + model yuklenebiliyorsa devreye girer;
+        # aksi halde paylasilan PyTorch detektoru aynen kullanilir (varsayilan davranis).
+        is_web_stream = bool(camera and getattr(camera, "source_type", None) == "web")
+        if is_web_stream and _web_stream_use_onnx_pose():
+            # PyTorch detector (annotate kaynagi) zaten yuklu; detection icin direkt ONNX'e gec.
+            web_detector = _build_web_onnx_detector(annotate_source=detector)
+            if web_detector is not None and web_detector.available:
+                detector = web_detector
+                logger.warning(
+                    "Web stream camera_id=%s direkt ONNX pose detektoru aktif: %s (%s)",
+                    self.camera_id, web_detector.model_name, web_detector.device_label,
+                )
+            else:
+                logger.warning(
+                    "Web stream camera_id=%s ONNX pose yuklenemedi, PyTorch'a donuluyor",
+                    self.camera_id,
+                )
         plate_pipeline = get_plate_pipeline() if plate_enabled else None
+        vehicle_tracker = VehicleTracker() if plate_pipeline else None
         if plate_pipeline:
             plate_pipeline.reset_stats()
             logger.warning(
@@ -248,12 +463,16 @@ class CameraStreamWorker:
                         time.sleep(3)
                         continue
 
-                    reader = _FrameReader(cap)
+                    live_drain = os.getenv("STREAM_LIVE_DRAIN_ENABLED", "true").strip().lower() in ("1", "true", "yes", "on")
+                    reader = _FrameReader(cap, live_drain=live_drain)
                     # Brief pause so the reader can buffer at least one frame
                     time.sleep(0.15)
-                    # Start (or restart) the display thread for this reader session
+                    # Start (or restart) the display thread for this reader session.
+                    # Web streams get a dedicated RAW display (frames only, overlays via
+                    # WebSocket); webcam/RTSP keep the existing annotated display path.
+                    display_target = self._run_web_display if is_web_stream else self._run_display
                     display_thread = threading.Thread(
-                        target=self._run_display, args=(reader,), daemon=True
+                        target=display_target, args=(reader,), daemon=True
                     )
                     display_thread.start()
 
@@ -290,13 +509,28 @@ class CameraStreamWorker:
                                 if ocr_result.confidence > 0
                                 else detection.confidence
                             )
+                            plate_text = ocr_result.text.normalized_plate or ocr_result.text.raw_text or ""
+                            # Vehicle tracking layer: stable vehicle_id + body color.
+                            if vehicle_tracker is not None:
+                                try:
+                                    body_crop = expand_bbox_crop(frame, detection.bbox, scale=3.0)
+                                    vehicle_tracker.update(detection.bbox, plate_text, confidence, body_crop)
+                                except Exception:
+                                    pass
                             plate_vote_buffer.add_vote(
                                 f"webcam_{self.camera_id}",
-                                ocr_result.text.normalized_plate or ocr_result.text.raw_text or "",
+                                plate_text,
                                 confidence,
                                 crop_path,
                             )
-                            _run_async(
+                            # Web stream: keep a small recent-plates list for overlay_update
+                            # (display only — does not affect vote buffer / dedup logic).
+                            if is_web_stream and plate_text:
+                                self._web_recent_plates = (
+                                    [{"plate": plate_text, "confidence": round(confidence, 3)}]
+                                    + [p for p in self._web_recent_plates if p.get("plate") != plate_text]
+                                )[:5]
+                            _broadcast_bg(
                                 manager.broadcast(
                                     f"live:{self.camera_id}",
                                     {
@@ -313,7 +547,7 @@ class CameraStreamWorker:
                 # ── Flush plate vote buffer every 300 frames ──────────────────
                 if plate_pipeline and frame_index % 300 == 0 and frame_index > 0:
                     try:
-                        plate_vote_buffer.flush_webcam(self.camera_id, db)
+                        plate_vote_buffer.flush_webcam(self.camera_id, db, vehicle_tracker)
                     except Exception as exc:
                         logger.warning("Camera %d plaka buffer flush hatasi: %s", self.camera_id, exc)
 
@@ -330,24 +564,62 @@ class CameraStreamWorker:
                     ):
                         last_classifier_probability = fight_classifier.predict(fight_buffer.latest(fight_classifier.clip_len))
                     score_info = fuse_classifier_score(score_info, last_classifier_probability)
+                    score_info["score"] = apply_classifier_suppression(
+                        float(score_info["score"]),
+                        float(score_info.get("heuristic_score", score_info["score"])),
+                        last_classifier_probability,
+                        float(self.settings.alarm_thresholds.get("OLASI_KAVGA", 55.0)),
+                    )
                     level, smoothed, consecutive = alarm.update(score_info["score"])
                     level = cap_level(level, score_info.get("label", "NORMAL"))
                     involved_ids = set(score_info.get("pair") or []) if self.settings.only_highlight_involved_persons else None
                     annotated = detector.annotate(frame, detections, smoothed, level, score_info.get("reasons", []), involved_ids)
                     incident = incident_tracker.update(frame_index, smoothed, level, score_info, annotated, datetime.utcnow())
                     if incident:
-                        _run_async(manager.broadcast(f"live:{self.camera_id}", {"type": "incident", **incident_payload(incident)}))
+                        _broadcast_bg(manager.broadcast(f"live:{self.camera_id}", {"type": "incident", **incident_payload(incident)}))
 
-                    # Push annotated frame; display thread will hold it briefly then resume raw
                     self._last_score = round(smoothed, 1)
                     self._last_level = level
-                    ok, encoded = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
-                    if ok:
-                        self.latest_jpeg = encoded.tobytes()
-                        self._annotated_at = time.monotonic()
+                    if is_web_stream:
+                        # Web: ham video AYRI thread'de akar (latest_jpeg'e dokunma).
+                        # Analiz sonucu yalnizca koordinat olarak frontend canvas'ina gider,
+                        # boylece video analizden bagimsiz, akici kalir.
+                        frame_h, frame_w = frame.shape[:2]
+                        _broadcast_bg(
+                            manager.broadcast(
+                                f"live:{self.camera_id}",
+                                {
+                                    "type": "overlay_update",
+                                    "camera_id": self.camera_id,
+                                    "boxes": [
+                                        {
+                                            "id": int(d.get("track_id") or -1),
+                                            "x1": int(d["bbox"][0]),
+                                            "y1": int(d["bbox"][1]),
+                                            "x2": int(d["bbox"][2]),
+                                            "y2": int(d["bbox"][3]),
+                                            "conf": round(float(d.get("confidence", 0.0)), 3),
+                                        }
+                                        for d in detections
+                                    ],
+                                    "score": round(smoothed, 1),
+                                    "level": level,
+                                    "plates": list(self._web_recent_plates),
+                                    "frame_w": int(frame_w),
+                                    "frame_h": int(frame_h),
+                                    "timestamp": time.time(),
+                                },
+                            )
+                        )
+                    else:
+                        # Push annotated frame; display thread will hold it briefly then resume raw
+                        ok, encoded = cv2.imencode(".jpg", annotated, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+                        if ok:
+                            self.latest_jpeg = encoded.tobytes()
+                            self._annotated_at = time.monotonic()
 
                     stats = perf.tick(detector.last_inference_ms)
-                    _run_async(
+                    _broadcast_bg(
                         manager.broadcast(
                             f"live:{self.camera_id}",
                             {
@@ -398,7 +670,7 @@ class CameraStreamWorker:
                             },
                         )
                         last_event_by_pair[pair_key] = frame_index
-                        _run_async(
+                        _broadcast_bg(
                             manager.broadcast(
                                 f"live:{self.camera_id}",
                                 {
@@ -413,16 +685,13 @@ class CameraStreamWorker:
                         )
         finally:
             self.running = False  # mark dead so is_running() returns False
-            loop = getattr(_thread_loop, "loop", None)
-            if loop and not loop.is_closed():
-                loop.close()
             if reader is not None:
                 reader.stop()
             if cap is not None:
                 cap.release()
             if plate_pipeline:
                 try:
-                    plate_vote_buffer.flush_webcam(self.camera_id, db)
+                    plate_vote_buffer.flush_webcam(self.camera_id, db, vehicle_tracker)
                 except Exception as exc:
                     logger.warning("Camera %d stream kapanirken plaka flush hatasi: %s", self.camera_id, exc)
             db.close()

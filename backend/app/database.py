@@ -83,6 +83,9 @@ def _migrate_sqlite() -> None:
                 "recognition_source": "VARCHAR(80) NOT NULL DEFAULT 'local_detector_easyocr'",
                 "details_json": "TEXT",
                 "frame_index": "INTEGER",
+                "vehicle_id": "VARCHAR(20)",
+                "vehicle_color_name": "VARCHAR(40)",
+                "vehicle_color_hex": "VARCHAR(9)",
             }
             for name, definition in plate_columns.items():
                 if name not in plate_existing:

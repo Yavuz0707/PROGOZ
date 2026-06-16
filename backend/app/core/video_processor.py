@@ -14,6 +14,7 @@ from app.core.alarm_manager import AlarmManager, cap_level
 from app.core.detector import get_detector
 from app.core.fight_classifier import FightClipBuffer, fuse_classifier_score, get_fight_classifier
 from app.core.motion_analyzer import MotionAnalyzer
+from app.core.scoring import apply_classifier_suppression
 from app.core.plate_recognition_pipeline import get_plate_pipeline
 from app.database import SessionLocal
 from app.models.analysis_job import AnalysisJob
@@ -23,6 +24,7 @@ from app.models.license_plate import LicensePlate
 from app.services.event_service import create_event
 from app.services.incident_service import IncidentTracker, incident_payload
 from app.services.plate_service import plate_vote_buffer, upsert_plate_detection
+from app.services.vehicle_tracker import VehicleTracker, expand_bbox_crop
 from app.services.websocket_manager import manager
 from app.utils.file_utils import public_static_path
 from app.utils.ffmpeg_utils import convert_to_h264, ffmpeg_available
@@ -84,6 +86,7 @@ class VideoProcessor:
             fight_buffer = FightClipBuffer(maxlen=self.settings.fight_classifier_clip_len)
             last_classifier_probability: float | None = None
             plate_pipeline = get_plate_pipeline() if bool(job.plate_recognition_enabled) else None
+            vehicle_tracker = VehicleTracker() if plate_pipeline else None
             if plate_pipeline:
                 plate_pipeline.reset_stats()
                 logger.warning(
@@ -242,9 +245,18 @@ class VideoProcessor:
                             )
                             if ocr_result.text.is_valid_format:
                                 plate_pipeline.stats["readable_plate_count"] += 1
+                            plate_text = ocr_result.text.normalized_plate or ocr_result.text.raw_text or ""
+                            # Vehicle tracking layer: assign a stable vehicle_id and
+                            # detect car body color (does not affect dedup/vote logic).
+                            if vehicle_tracker is not None:
+                                try:
+                                    body_crop = expand_bbox_crop(frame, detection.bbox, scale=3.0)
+                                    vehicle_tracker.update(detection.bbox, plate_text, confidence, body_crop)
+                                except Exception:
+                                    pass
                             current_best = plate_vote_buffer.add_vote(
                                 job_id,
-                                ocr_result.text.normalized_plate or ocr_result.text.raw_text or "",
+                                plate_text,
                                 confidence,
                                 crop_path,
                             )
@@ -252,6 +264,11 @@ class VideoProcessor:
                                 text_changed = current_best["text"] != plate_interim_written_text
                                 conf_improved = current_best["confidence"] > plate_interim_written_conf + 0.05
                                 if text_changed or conf_improved:
+                                    interim_meta = (
+                                        vehicle_tracker.find_vehicle_for_plate(current_best["text"])
+                                        if vehicle_tracker is not None
+                                        else None
+                                    )
                                     try:
                                         upsert_plate_detection(
                                             db,
@@ -266,6 +283,9 @@ class VideoProcessor:
                                             detection_confidence=current_best["confidence"],
                                             crop_path=current_best.get("crop_path"),
                                             recognition_source="vote_buffer_interim",
+                                            vehicle_id=interim_meta["vehicle_id"] if interim_meta else None,
+                                            vehicle_color_name=interim_meta["color_name"] if interim_meta else None,
+                                            vehicle_color_hex=interim_meta["color_hex"] if interim_meta else None,
                                         )
                                         plate_interim_written_text = current_best["text"]
                                         plate_interim_written_conf = current_best["confidence"]
@@ -321,6 +341,12 @@ class VideoProcessor:
 
                     try:
                         score_info = fuse_classifier_score(score_info, last_classifier_probability)
+                        score_info["score"] = apply_classifier_suppression(
+                            float(score_info["score"]),
+                            float(score_info.get("heuristic_score", score_info["score"])),
+                            last_classifier_probability,
+                            float(self.settings.alarm_thresholds.get("OLASI_KAVGA", 55.0)),
+                        )
                         level, smoothed, consecutive = alarm.update(score_info["score"])
                         level = cap_level(level, score_info.get("label", "NORMAL"))
                         involved_ids = (
@@ -454,6 +480,11 @@ class VideoProcessor:
                             LicensePlate.plate_text_normalized != vote_winner["text"],
                         ).delete(synchronize_session=False)
                         db.commit()
+                        winner_meta = (
+                            vehicle_tracker.find_vehicle_for_plate(vote_winner["text"])
+                            if vehicle_tracker is not None
+                            else None
+                        )
                         upsert_plate_detection(
                             db,
                             source_type="video",
@@ -468,6 +499,9 @@ class VideoProcessor:
                             crop_path=vote_winner["crop_path"],
                             recognition_source="vote_buffer_winner",
                             details={"seen_count": vote_winner["seen_count"]},
+                            vehicle_id=winner_meta["vehicle_id"] if winner_meta else None,
+                            vehicle_color_name=winner_meta["color_name"] if winner_meta else None,
+                            vehicle_color_hex=winner_meta["color_hex"] if winner_meta else None,
                         )
                         plate_count = vote_winner["seen_count"]
                         plate_pipeline.stats["plates_saved"] += 1
