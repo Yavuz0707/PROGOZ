@@ -26,6 +26,9 @@ def _strip_ansi(text: str) -> str:
 # Dogrudan oynatilabilir akis uzantilari — bunlar icin yt-dlp'ye gerek yok.
 _DIRECT_STREAM_SUFFIXES = (".m3u8", ".mjpg", ".mjpeg")
 
+# Sadece bu platform URL'leri yt-dlp ile cikarilir; digerleri oldugu gibi dondurulur.
+_YOUTUBE_HOSTS = ("youtube.com", "youtu.be")
+
 
 def is_direct_stream_url(url: str) -> bool:
     """URL dogrudan oynatilabilir bir akis mi (.m3u8 / .mjpg)?
@@ -38,6 +41,17 @@ def is_direct_stream_url(url: str) -> bool:
         return False
     path = url.split("?", 1)[0].split("#", 1)[0].lower().rstrip("/")
     return path.endswith(_DIRECT_STREAM_SUFFIXES)
+
+
+def is_youtube_url(url: str) -> bool:
+    """URL bir YouTube sayfa/video URL'si mi?
+
+    Sadece youtube.com / youtu.be iceren URL'ler yt-dlp ile cikarilir.
+    Diger tum URL'ler (HLS/RTSP/MJPEG vb.) dogrudan kullanilir.
+    """
+    if not url:
+        return False
+    return any(host in url.lower() for host in _YOUTUBE_HOSTS)
 
 
 def _do_extract(page_url: str) -> str:
@@ -85,6 +99,12 @@ def extract_stream_url(page_url: str) -> str:
     # Dogrudan akis URL'leri (.m3u8 / .mjpg) oldugu gibi dondurulur — yt-dlp atlanir.
     if is_direct_stream_url(page_url):
         logger.info("Dogrudan akis URL'si, yt-dlp atlandi: %s", page_url[:80])
+        return page_url
+
+    # yt-dlp yalnizca YouTube URL'leri icin kullanilir; diger tum URL'ler
+    # (HLS/RTSP/MJPEG/ozel sunucu vb.) oldugu gibi dondurulur.
+    if not is_youtube_url(page_url):
+        logger.info("YouTube disi URL, yt-dlp atlandi: %s", page_url[:80])
         return page_url
 
     try:
