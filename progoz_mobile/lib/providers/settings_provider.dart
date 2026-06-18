@@ -18,7 +18,13 @@ class SettingsProvider extends ChangeNotifier {
     _fightNotifications = prefs.getBool('fight_notifications') ?? true;
     _plateNotifications = prefs.getBool('plate_notifications') ?? true;
     _minScore = prefs.getDouble('min_score') ?? 50.0;
-    _serverUrl = prefs.getString('server_url') ?? kDefaultBaseUrl;
+    final savedServerUrl = prefs.getString('server_url');
+    _serverUrl = savedServerUrl ?? kDefaultBaseUrl;
+    if (_serverUrl.contains('192.168.1.102') ||
+        _serverUrl.contains('192.168.1.103')) {
+      _serverUrl = kDefaultBaseUrl;
+      await prefs.setString('server_url', _serverUrl);
+    }
     notifyListeners();
   }
 

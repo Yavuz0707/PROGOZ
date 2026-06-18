@@ -10,6 +10,7 @@ class AnalysisJob(Base):
     __tablename__ = "analysis_jobs"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True, nullable=True)
     filename = Column(String(255), nullable=False)
     original_path = Column(String(700), nullable=False)
     processed_path = Column(String(700), nullable=True)

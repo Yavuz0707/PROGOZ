@@ -35,8 +35,12 @@ class AuthProvider extends ChangeNotifier {
       return true;
     } catch (e) {
       final raw = e.toString().replaceFirst('Exception: ', '');
-      if (raw.contains('Failed to fetch') || raw.contains('XMLHttpRequest') || raw.contains('ClientException')) {
-        _error = 'Sunucuya bağlanılamadı.\nWeb tarayıcısında CORS hatası oluştu.\nLütfen uygulamayı mobil cihazda deneyin.';
+      if (raw.contains('Failed to fetch') ||
+          raw.contains('XMLHttpRequest') ||
+          raw.contains('ClientException') ||
+          raw.contains('TimeoutException')) {
+        _error =
+            'Sunucuya baglanilamadi.\nSunucu adresini kontrol edin: http://172.20.10.3:8002\nTelefon ve bilgisayar ayni Wi-Fi aginda olmali.';
       } else {
         _error = raw;
       }

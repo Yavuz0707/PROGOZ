@@ -1,17 +1,59 @@
 import time
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 
+from app.database import SessionLocal
+from app.models.camera import Camera
 from app.services.camera_service import camera_runtime
+from app.services.auth_service import get_user_from_token
+from app.services.ownership_service import get_owned_job, is_admin
 from app.services.websocket_manager import manager
 
 
 router = APIRouter(tags=["stream"])
 
 
+def _user_from_ws_token(websocket: WebSocket):
+    token = websocket.query_params.get("token")
+    if not token:
+        return None
+    db = SessionLocal()
+    try:
+        return get_user_from_token(db, token)
+    except HTTPException:
+        return None
+    finally:
+        db.close()
+
+
+def _authorize_live_camera(camera_id: int, token: str | None):
+    if not token:
+        raise HTTPException(status_code=401, detail="Kimlik dogrulama bilgileri eksik.")
+    db = SessionLocal()
+    try:
+        user = get_user_from_token(db, token)
+        camera = db.get(Camera, camera_id)
+        if camera is not None and not is_admin(user) and camera.user_id != user.id:
+            raise HTTPException(status_code=404, detail="Kamera bulunamadi.")
+    finally:
+        db.close()
+
+
 @router.websocket("/ws/live/{camera_id}")
 async def live_ws(websocket: WebSocket, camera_id: int):
+    user = _user_from_ws_token(websocket)
+    if user is None:
+        await websocket.close(code=1008)
+        return
+    db = SessionLocal()
+    try:
+        camera = db.get(Camera, camera_id)
+        if camera is not None and not is_admin(user) and camera.user_id != user.id:
+            await websocket.close(code=1008)
+            return
+    finally:
+        db.close()
     channel = f"live:{camera_id}"
     await manager.connect(channel, websocket)
     try:
@@ -23,6 +65,9 @@ async def live_ws(websocket: WebSocket, camera_id: int):
 
 @router.websocket("/ws/jobs")
 async def jobs_ws(websocket: WebSocket):
+    if _user_from_ws_token(websocket) is None:
+        await websocket.close(code=1008)
+        return
     await manager.connect("jobs", websocket)
     try:
         while True:
@@ -33,6 +78,18 @@ async def jobs_ws(websocket: WebSocket):
 
 @router.websocket("/ws/jobs/{job_id}")
 async def job_ws(websocket: WebSocket, job_id: int):
+    user = _user_from_ws_token(websocket)
+    if user is None:
+        await websocket.close(code=1008)
+        return
+    db = SessionLocal()
+    try:
+        get_owned_job(db, job_id, user)
+    except HTTPException:
+        await websocket.close(code=1008)
+        return
+    finally:
+        db.close()
     channel = f"job:{job_id}"
     await manager.connect(channel, websocket)
     try:
@@ -43,7 +100,9 @@ async def job_ws(websocket: WebSocket, job_id: int):
 
 
 @router.get("/api/stream/{camera_id}/mjpeg")
-def mjpeg_stream(camera_id: int):
+def mjpeg_stream(camera_id: int, token: str | None = Query(default=None)):
+    _authorize_live_camera(camera_id, token)
+
     def gen():
         boundary = b"--frame\r\nContent-Type: image/jpeg\r\n\r\n"
         last_frame: bytes | None = None

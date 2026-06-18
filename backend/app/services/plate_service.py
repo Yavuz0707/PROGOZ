@@ -271,6 +271,13 @@ def upsert_plate_detection(
 def list_plates(db: Session, filters: dict[str, Any]) -> list[LicensePlate]:
     settings = get_settings()
     query = db.query(LicensePlate)
+    owner_user = filters.get("owner_user")
+    if owner_user is not None and getattr(owner_user, "role", None) != "admin":
+        query = (
+            query.outerjoin(Camera, LicensePlate.camera_id == Camera.id)
+            .outerjoin(AnalysisJob, LicensePlate.analysis_job_id == AnalysisJob.id)
+            .filter(or_(Camera.user_id == owner_user.id, AnalysisJob.user_id == owner_user.id))
+        )
     if not filters.get("show_unreadable", settings.plate_show_unreadable_in_default_list):
         query = query.filter(
             LicensePlate.status != "unreadable",
@@ -412,13 +419,29 @@ def start_plate_cleanup_scheduler() -> Any | None:
 # Stats / export
 # ---------------------------------------------------------------------------
 
-def plate_stats(db: Session) -> dict:
+def _plate_query_for_user(db: Session, owner_user=None):
+    query = db.query(LicensePlate)
+    if owner_user is not None and getattr(owner_user, "role", None) != "admin":
+        query = (
+            query.outerjoin(Camera, LicensePlate.camera_id == Camera.id)
+            .outerjoin(AnalysisJob, LicensePlate.analysis_job_id == AnalysisJob.id)
+            .filter(or_(Camera.user_id == owner_user.id, AnalysisJob.user_id == owner_user.id))
+        )
+    return query
+
+
+def plate_stats(db: Session, owner_user=None) -> dict:
     today = datetime.utcnow().date()
-    totals_by_source = dict(db.query(LicensePlate.source_type, func.count(LicensePlate.id)).group_by(LicensePlate.source_type).all())
-    valid_count = db.query(LicensePlate).filter(LicensePlate.is_valid_format.is_(True)).count()
-    total = db.query(LicensePlate).count()
+    totals_by_source = dict(
+        _plate_query_for_user(db, owner_user)
+        .with_entities(LicensePlate.source_type, func.count(LicensePlate.id))
+        .group_by(LicensePlate.source_type)
+        .all()
+    )
+    valid_count = _plate_query_for_user(db, owner_user).filter(LicensePlate.is_valid_format.is_(True)).count()
+    total = _plate_query_for_user(db, owner_user).count()
     unreadable_count = (
-        db.query(LicensePlate)
+        _plate_query_for_user(db, owner_user)
         .filter(
             or_(
                 LicensePlate.plate_text_normalized.is_(None),
@@ -430,20 +453,22 @@ def plate_stats(db: Session) -> dict:
         .count()
     )
     camera_counts = dict(
-        db.query(LicensePlate.camera_id, func.count(LicensePlate.id))
+        _plate_query_for_user(db, owner_user)
+        .with_entities(LicensePlate.camera_id, func.count(LicensePlate.id))
         .filter(LicensePlate.camera_id.is_not(None))
         .group_by(LicensePlate.camera_id)
         .all()
     )
     video_counts = dict(
-        db.query(LicensePlate.analysis_job_id, func.count(LicensePlate.id))
+        _plate_query_for_user(db, owner_user)
+        .with_entities(LicensePlate.analysis_job_id, func.count(LicensePlate.id))
         .filter(LicensePlate.analysis_job_id.is_not(None))
         .group_by(LicensePlate.analysis_job_id)
         .all()
     )
     return {
         "total": total,
-        "today": db.query(LicensePlate).filter(func.date(LicensePlate.created_at) == today.isoformat()).count(),
+        "today": _plate_query_for_user(db, owner_user).filter(func.date(LicensePlate.created_at) == today.isoformat()).count(),
         "by_source": totals_by_source,
         "by_camera": camera_counts,
         "by_video": video_counts,

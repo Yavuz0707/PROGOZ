@@ -1,4 +1,4 @@
-import { Camera, Gauge, Globe, LayoutDashboard, LogOut, RectangleEllipsis, Settings, Upload, Video } from "lucide-react";
+import { Camera, Gauge, Globe, LayoutDashboard, LogOut, RectangleEllipsis, Settings, Upload, Users, Video } from "lucide-react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -6,6 +6,7 @@ const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
   { to: "/live", label: "Canli Kamera", icon: Video },
   { to: "/web-stream", label: "Web Yayini", icon: Globe },
+  { to: "/persons", label: "Kisi Takibi", icon: Users },
   { to: "/upload", label: "Video Analiz", icon: Upload },
   { to: "/events", label: "Olaylar", icon: Gauge },
   { to: "/plates", label: "Plakalar", icon: RectangleEllipsis },

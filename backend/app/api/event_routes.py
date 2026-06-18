@@ -10,6 +10,7 @@ from app.models.event import Event
 from app.schemas.common import ok
 from app.schemas.event_schema import EventRead
 from app.services.auth_service import get_current_user
+from app.services.ownership_service import ensure_owned_source, filter_by_owner
 from app.utils.file_utils import public_static_path
 
 
@@ -25,8 +26,9 @@ def list_events(
     start_date: datetime | None = Query(default=None),
     end_date: datetime | None = Query(default=None),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    query = db.query(Event)
+    query = filter_by_owner(db.query(Event), Event, current_user)
     if severity:
         query = query.filter(Event.severity == severity)
     if camera_id:
@@ -44,8 +46,8 @@ def list_events(
 
 
 @router.get("/stats")
-def event_stats(db: Session = Depends(get_db)):
-    events = db.query(Event).all()
+def event_stats(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    events = filter_by_owner(db.query(Event), Event, current_user).all()
     counts = {"KAVGA": 0, "OLASI_KAVGA": 0, "SUPHELI": 0, "NORMAL": 0}
     for event in events:
         counts[event.severity] = counts.get(event.severity, 0) + 1
@@ -53,8 +55,8 @@ def event_stats(db: Session = Depends(get_db)):
 
 
 @router.get("/export/csv")
-def export_csv(db: Session = Depends(get_db)):
-    events = db.query(Event).order_by(Event.created_at.desc()).all()
+def export_csv(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    events = filter_by_owner(db.query(Event), Event, current_user).order_by(Event.created_at.desc()).all()
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(["id", "source_type", "severity", "score", "camera_id", "analysis_job_id", "created_at"])
@@ -64,18 +66,20 @@ def export_csv(db: Session = Depends(get_db)):
 
 
 @router.get("/{event_id}")
-def get_event(event_id: int, db: Session = Depends(get_db)):
+def get_event(event_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     event = db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Olay bulunamadi.")
+    ensure_owned_source(event, current_user, "Olay bulunamadi.")
     return ok(_event_payload(event))
 
 
 @router.delete("/{event_id}")
-def delete_event(event_id: int, db: Session = Depends(get_db)):
+def delete_event(event_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     event = db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Olay bulunamadi.")
+    ensure_owned_source(event, current_user, "Olay bulunamadi.")
     db.delete(event)
     db.commit()
     return ok(message="Olay silindi.")
@@ -86,4 +90,3 @@ def _event_payload(event: Event) -> dict:
     data["snapshot_url"] = public_static_path(event.snapshot_path)
     data["clip_url"] = public_static_path(event.clip_path)
     return data
-

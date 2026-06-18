@@ -27,6 +27,9 @@ backend/app/static/clips/*
 backend/app/static/plate_crops/
 backend/app/static/plate_debug/
 backend/app/static/plates/
+# Üretilen kişi kırpıntıları (büyük, paylaşılmaz)
+backend/app/static/person_crops/*
+!backend/app/static/person_crops/.gitkeep
 # Büyük arşiv / yerel veri klasörü
 archive/
 frontend/node_modules/
@@ -53,4 +56,6 @@ backend/*adminsdk*.json
 # Log dosyaları
 *_log.txt
 *_err.txt
+*_current.log
+*_current.err
 backend/..backend_log.txt

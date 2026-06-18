@@ -5,8 +5,11 @@ from pathlib import Path
 
 logger = logging.getLogger("progoz.stream_extractor")
 
+# 720p tercih: insan tespiti icin daha fazla piksel (480p uzak insanlari kaciriyordu).
 _FORMAT = (
-    "best[height<=480][protocol=m3u8_native]"
+    "best[height<=720][protocol=m3u8_native]"
+    "/best[height<=720]"
+    "/best[height<=480][protocol=m3u8_native]"
     "/best[height<=480]"
     "/best[protocol=m3u8_native]"
     "/best"
@@ -63,6 +66,10 @@ def _do_extract(page_url: str) -> str:
         "quiet": True,
         "no_warnings": True,
         "socket_timeout": 10,
+        # URL'de "&list=..." olsa bile TEK videoyu cikar (playlist'i isleme).
+        # Aksi halde yt-dlp tum oynatma listesini tarar -> cok yavas / 25sn timeout
+        # -> "kabul etmiyor". noplaylist bunu kesin cozer.
+        "noplaylist": True,
     }
     if _COOKIES_FILE.exists():
         opts["cookiefile"] = str(_COOKIES_FILE)

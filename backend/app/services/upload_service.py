@@ -10,7 +10,7 @@ from app.utils.file_utils import safe_filename
 settings = get_settings()
 
 
-async def save_upload_file(file: UploadFile, db) -> AnalysisJob:
+async def save_upload_file(file: UploadFile, db, user_id: int | None = None) -> AnalysisJob:
     suffix = Path(file.filename or "").suffix.lower()
     if suffix not in settings.allowed_video_extensions:
         raise HTTPException(status_code=400, detail="Sadece mp4, avi, mov, mkv veya webm video dosyalari yuklenebilir.")
@@ -23,9 +23,8 @@ async def save_upload_file(file: UploadFile, db) -> AnalysisJob:
     with target.open("wb") as out:
         while chunk := await file.read(1024 * 1024):
             out.write(chunk)
-    job = AnalysisJob(filename=target.name, original_path=str(target), status="queued")
+    job = AnalysisJob(filename=target.name, original_path=str(target), status="queued", user_id=user_id)
     db.add(job)
     db.commit()
     db.refresh(job)
     return job
-

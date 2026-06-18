@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../config/api_config.dart';
 import '../config/theme.dart';
 import '../providers/auth_provider.dart';
+import '../providers/settings_provider.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -13,18 +15,30 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _serverController = TextEditingController(text: kDefaultBaseUrl);
   bool _obscurePassword = true;
+  bool _serverInitialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_serverInitialized) return;
+    _serverController.text = context.read<SettingsProvider>().serverUrl;
+    _serverInitialized = true;
+  }
 
   @override
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _serverController.dispose();
     super.dispose();
   }
 
   Future<void> _login() async {
     final username = _usernameController.text.trim();
     final password = _passwordController.text;
+    final serverUrl = _normalizeServerUrl(_serverController.text);
     if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -34,7 +48,17 @@ class _LoginScreenState extends State<LoginScreen> {
       );
       return;
     }
+    if (serverUrl.isEmpty || !serverUrl.startsWith('http')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Sunucu adresi http://... formatinda olmali'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
 
+    await context.read<SettingsProvider>().setServerUrl(serverUrl);
     final auth = context.read<AuthProvider>();
     final success = await auth.login(username, password);
     if (!success && mounted) {
@@ -45,6 +69,14 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     }
+  }
+
+  String _normalizeServerUrl(String value) {
+    var text = value.trim();
+    while (text.endsWith('/')) {
+      text = text.substring(0, text.length - 1);
+    }
+    return text;
   }
 
   @override
@@ -62,7 +94,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    minHeight: MediaQuery.of(context).size.height -
+                    minHeight:
+                        MediaQuery.of(context).size.height -
                         MediaQuery.of(context).padding.vertical,
                   ),
                   child: IntrinsicHeight(
@@ -71,7 +104,14 @@ class _LoginScreenState extends State<LoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _buildLogo(),
-                        const SizedBox(height: 48),
+                        const SizedBox(height: 36),
+                        _GlassField(
+                          controller: _serverController,
+                          label: 'Sunucu Adresi',
+                          icon: Icons.dns_outlined,
+                          textInputAction: TextInputAction.next,
+                        ),
+                        const SizedBox(height: 16),
                         _GlassField(
                           controller: _usernameController,
                           label: 'Kullanıcı Adı',
@@ -94,14 +134,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               color: AppColors.textSecondary,
                             ),
                             onPressed: () => setState(
-                                () => _obscurePassword = !_obscurePassword),
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 32),
-                        _GlowButton(
-                          loading: auth.loading,
-                          onTap: _login,
-                        ),
+                        _GlowButton(loading: auth.loading, onTap: _login),
                         const SizedBox(height: 24),
                       ],
                     ),
@@ -118,16 +156,30 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildLogo() {
     return Column(
       children: [
-        // Düz, çerçeveli ikon (glow/gölge yok — monokrom).
-        Container(
-          width: 92,
-          height: 92,
-          decoration: BoxDecoration(
-            color: AppColors.card,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.border),
+        // PROGÖZ logosu (assets/images/progoz_logo.png).
+        // Dosya yoksa kırılmaz — çerçeveli güvenlik ikonuna düşer.
+        SizedBox(
+          width: 260,
+          height: 150,
+          child: Image.asset(
+            'assets/images/progoz_logo.png',
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.medium,
+            errorBuilder: (context, error, stack) => Container(
+              width: 92,
+              height: 92,
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: const Icon(
+                Icons.security,
+                size: 48,
+                color: AppColors.primary,
+              ),
+            ),
           ),
-          child: const Icon(Icons.security, size: 48, color: AppColors.primary),
         ),
         const SizedBox(height: 22),
         const Text(
@@ -142,7 +194,11 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(height: 8),
         const Text(
           'Güvenlik Sistemi',
-          style: TextStyle(color: AppColors.textSecondary, fontSize: 14, letterSpacing: 1),
+          style: TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 14,
+            letterSpacing: 1,
+          ),
         ),
       ],
     );
@@ -206,7 +262,10 @@ class _GlowButton extends StatelessWidget {
             ? const SizedBox(
                 height: 22,
                 width: 22,
-                child: CircularProgressIndicator(strokeWidth: 2.4, color: Colors.black),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.4,
+                  color: Colors.black,
+                ),
               )
             : const Text(
                 'Giriş Yap',

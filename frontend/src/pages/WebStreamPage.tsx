@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Globe, Play, Square, Trash2, Wifi, WifiOff } from "lucide-react";
-import { api, unwrap } from "../api/client";
+import { api, streamUrl, unwrap } from "../api/client";
 import { SeverityBadge } from "../components/SeverityBadge";
 import { useWebSocket } from "../hooks/useWebSocket";
 import type { Camera } from "../types";
@@ -416,7 +416,7 @@ export default function WebStreamPage() {
                   {/* Thread 1: ham MJPEG video — analizden bagimsiz, akici akar */}
                   <img
                     className="h-full w-full object-contain"
-                    src={`/api/stream/${activeCam.id}/mjpeg`}
+                    src={streamUrl(activeCam.id)}
                     alt="Canli yayin"
                   />
                   {/* Thread 2 ciktisi: overlay_update ile gelen bounding box'lar */}

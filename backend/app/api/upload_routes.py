@@ -18,6 +18,7 @@ from app.schemas.common import ok
 from app.schemas.event_schema import EventRead
 from app.services.auth_service import get_current_user
 from app.services.incident_service import incident_payload
+from app.services.ownership_service import ensure_owned_source, get_owned_job, is_admin
 from app.services.upload_service import save_upload_file
 from app.utils.file_utils import public_static_path
 
@@ -49,6 +50,7 @@ async def analyze_video(
     only_incidents: Any = Form(True),
     plate_recognition_enabled: Any = Form(True),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     save_processed_video_value = _parse_bool(save_processed_video)
     only_incidents_value = _parse_bool(only_incidents) or _parse_bool(fast_result)
@@ -63,7 +65,7 @@ async def analyze_video(
         only_incidents_value,
         debug_value,
     )
-    job = await save_upload_file(file, db)
+    job = await save_upload_file(file, db, user_id=current_user.id)
     job.analysis_mode = analysis_mode
     job.save_processed_video = 0 if only_incidents_value else int(save_processed_video_value)
     job.debug_scoring = int(debug_value)
@@ -78,24 +80,23 @@ async def analyze_video(
 
 
 @router.get("/jobs")
-def list_jobs(db: Session = Depends(get_db)):
-    jobs = db.query(AnalysisJob).order_by(AnalysisJob.id.desc()).all()
+def list_jobs(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    query = db.query(AnalysisJob)
+    if not is_admin(current_user):
+        query = query.filter(AnalysisJob.user_id == current_user.id)
+    jobs = query.order_by(AnalysisJob.id.desc()).all()
     return ok([_job_payload(job) for job in jobs])
 
 
 @router.get("/jobs/{job_id}")
-def get_job(job_id: int, db: Session = Depends(get_db)):
-    job = db.get(AnalysisJob, job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Analiz isi bulunamadi.")
+def get_job(job_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    job = get_owned_job(db, job_id, current_user)
     return ok(_job_payload(job))
 
 
 @router.get("/jobs/{job_id}/result")
-def get_job_result(job_id: int, db: Session = Depends(get_db)):
-    job = db.get(AnalysisJob, job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Analiz isi bulunamadi.")
+def get_job_result(job_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    job = get_owned_job(db, job_id, current_user)
     events = db.query(Event).filter(Event.analysis_job_id == job_id).order_by(Event.created_at.desc()).all()
     incidents = db.query(Incident).filter(Incident.analysis_job_id == job_id).order_by(Incident.created_at.desc()).all()
     plates = db.query(LicensePlate).filter(LicensePlate.analysis_job_id == job_id).order_by(LicensePlate.last_seen_time_seconds.asc()).all()
@@ -110,10 +111,8 @@ def get_job_result(job_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/jobs/{job_id}/cancel")
-def cancel_analysis(job_id: int, db: Session = Depends(get_db)):
-    job = db.get(AnalysisJob, job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Analiz isi bulunamadi.")
+def cancel_analysis(job_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    job = get_owned_job(db, job_id, current_user)
     cancel_job(job_id)
     job.status = "cancelled"
     job.current_stage = "cancelled"
@@ -123,10 +122,11 @@ def cancel_analysis(job_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/events/{incident_id}")
-def delete_event(incident_id: int, db: Session = Depends(get_db)):
+def delete_event(incident_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     incident = db.get(Incident, incident_id)
     if not incident:
         raise HTTPException(status_code=404, detail="Olay bulunamadi.")
+    ensure_owned_source(incident, current_user, "Olay bulunamadi.")
     snapshot_path = getattr(incident, "best_snapshot_path", None)
     if snapshot_path:
         try:
@@ -139,10 +139,8 @@ def delete_event(incident_id: int, db: Session = Depends(get_db)):
 
 
 @router.delete("/jobs/{job_id}")
-def delete_job(job_id: int, db: Session = Depends(get_db)):
-    job = db.get(AnalysisJob, job_id)
-    if not job:
-        raise HTTPException(status_code=404, detail="Analiz isi bulunamadi.")
+def delete_job(job_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    job = get_owned_job(db, job_id, current_user)
     if job.status == "running":
         raise HTTPException(status_code=400, detail="Devam eden analiz silinemez. Once durdurun.")
     incidents = db.query(Incident).filter(Incident.analysis_job_id == job_id).all()
@@ -169,7 +167,8 @@ def delete_job(job_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/jobs/{job_id}/incidents")
-def get_job_incidents(job_id: int, db: Session = Depends(get_db)):
+def get_job_incidents(job_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    get_owned_job(db, job_id, current_user)
     incidents = db.query(Incident).filter(Incident.analysis_job_id == job_id).order_by(Incident.created_at.desc()).all()
     return ok([incident_payload(item) for item in incidents])
 

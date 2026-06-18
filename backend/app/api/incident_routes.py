@@ -8,6 +8,7 @@ from app.models.incident import Incident
 from app.schemas.common import ok
 from app.services.auth_service import get_current_user
 from app.services.incident_service import incident_payload
+from app.services.ownership_service import ensure_owned_source, filter_by_owner
 
 
 router = APIRouter(prefix="/incidents", tags=["incidents"], dependencies=[Depends(get_current_user)])
@@ -24,8 +25,9 @@ def list_incidents(
     date_from: datetime | None = Query(default=None),
     date_to: datetime | None = Query(default=None),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
-    query = db.query(Incident)
+    query = filter_by_owner(db.query(Incident), Incident, current_user)
     if source_type:
         query = query.filter(Incident.source_type == source_type)
     if camera_id:
@@ -47,18 +49,20 @@ def list_incidents(
 
 
 @router.get("/{incident_id}")
-def get_incident(incident_id: int, db: Session = Depends(get_db)):
+def get_incident(incident_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     incident = db.get(Incident, incident_id)
     if not incident:
         raise HTTPException(status_code=404, detail="Incident bulunamadi.")
+    ensure_owned_source(incident, current_user, "Incident bulunamadi.")
     return ok(incident_payload(incident))
 
 
 @router.put("/{incident_id}/status")
-def update_status(incident_id: int, payload: dict, db: Session = Depends(get_db)):
+def update_status(incident_id: int, payload: dict, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     incident = db.get(Incident, incident_id)
     if not incident:
         raise HTTPException(status_code=404, detail="Incident bulunamadi.")
+    ensure_owned_source(incident, current_user, "Incident bulunamadi.")
     status = payload.get("status")
     if status not in {"confirmed", "false_positive", "ignored"}:
         raise HTTPException(status_code=400, detail="Gecersiz incident status.")

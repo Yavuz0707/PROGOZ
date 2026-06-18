@@ -6,7 +6,9 @@ import EventDetailPage from "./pages/EventDetailPage";
 import EventsPage from "./pages/EventsPage";
 import LiveCameraPage from "./pages/LiveCameraPage";
 import LoginPage from "./pages/LoginPage";
+import PersonTrackingPage from "./pages/PersonTrackingPage";
 import PlatesPage from "./pages/PlatesPage";
+import RegisterPage from "./pages/RegisterPage";
 import SettingsPage from "./pages/SettingsPage";
 import VideoUploadPage from "./pages/VideoUploadPage";
 import WebStreamPage from "./pages/WebStreamPage";
@@ -19,6 +21,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
       <Route element={<Protected />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/live" element={<LiveCameraPage />} />
@@ -27,6 +30,7 @@ export default function App() {
         <Route path="/events/:id" element={<EventDetailPage />} />
         <Route path="/plates" element={<PlatesPage />} />
         <Route path="/web-stream" element={<WebStreamPage />} />
+        <Route path="/persons" element={<PersonTrackingPage />} />
         <Route path="/cameras" element={<CamerasPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>

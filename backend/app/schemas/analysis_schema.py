@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 class AnalysisJobRead(BaseModel):
     id: int
+    user_id: Optional[int] = None
     filename: str
     original_path: str
     processed_path: Optional[str]

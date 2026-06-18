@@ -57,7 +57,14 @@ export async function unwrap<T>(promise: Promise<{ data: ApiEnvelope<T> }>): Pro
 export const wsUrl = (path: string) => {
   const url = new URL(API_BASE_URL);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  return `${url.origin}${path}`;
+  const token = localStorage.getItem("progoz_token");
+  const sep = path.includes("?") ? "&" : "?";
+  return `${url.origin}${path}${token ? `${sep}token=${encodeURIComponent(token)}` : ""}`;
+};
+
+export const streamUrl = (cameraId: number) => {
+  const token = localStorage.getItem("progoz_token");
+  return `/api/stream/${cameraId}/mjpeg${token ? `?token=${encodeURIComponent(token)}` : ""}`;
 };
 
 export function assetUrl(path?: string | null) {

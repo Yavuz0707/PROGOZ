@@ -1,5 +1,5 @@
 import { FormEvent, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { api, unwrap } from "../api/client";
 
 type Phase = "splash" | "transitioning" | "form";
@@ -134,7 +134,12 @@ export default function LoginPage() {
             {isLoading ? <span className="login-spinner" /> : "Giriş Yap"}
           </button>
 
-          <p className="login-version">v1.0.0</p>
+          <p className="login-version" style={{ marginTop: 14 }}>
+            Hesabın yok mu?{" "}
+            <Link to="/register" style={{ color: "#818cf8", textDecoration: "none" }}>
+              Kayıt ol
+            </Link>
+          </p>
         </form>
       </div>
     </div>

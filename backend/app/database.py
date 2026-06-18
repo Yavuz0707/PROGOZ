@@ -20,7 +20,7 @@ def get_db():
 
 
 def init_db() -> None:
-    from app.models import analysis_job, camera, event, incident, license_plate, user  # noqa: F401
+    from app.models import analysis_job, camera, event, incident, license_plate, tracked_person, user  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _migrate_sqlite()
@@ -57,6 +57,7 @@ def _migrate_sqlite() -> None:
     job_existing = {column["name"] for column in inspector.get_columns("analysis_jobs")}
     job_columns = {
         "skipped_frames": "INTEGER NOT NULL DEFAULT 0",
+        "user_id": "INTEGER",
         "current_stage": "VARCHAR(60) NOT NULL DEFAULT 'queued'",
         "analysis_mode": "VARCHAR(40) NOT NULL DEFAULT 'fast'",
         "save_processed_video": "INTEGER NOT NULL DEFAULT 1",
@@ -73,6 +74,7 @@ def _migrate_sqlite() -> None:
             camera_columns = {
                 "plate_recognition_enabled": "BOOLEAN NOT NULL DEFAULT 1",
                 "plate_frame_interval": "INTEGER NOT NULL DEFAULT 10",
+                "user_id": "INTEGER",
             }
             for name, definition in camera_columns.items():
                 if name not in camera_existing:

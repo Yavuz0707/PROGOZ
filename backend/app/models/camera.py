@@ -10,6 +10,7 @@ class Camera(Base):
     __tablename__ = "cameras"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, index=True, nullable=True)  # kamerayi ekleyen kullanici (sahip)
     name = Column(String(120), nullable=False)
     source_type = Column(String(30), nullable=False)
     rtsp_url = Column(String(500), nullable=True)

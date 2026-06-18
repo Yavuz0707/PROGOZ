@@ -14,6 +14,7 @@ from app.database import get_db
 from app.models.license_plate import LicensePlate
 from app.schemas.common import ok
 from app.services.auth_service import get_current_user, get_user_by_username_or_email, require_admin
+from app.services.ownership_service import ensure_owned_source, get_owned_camera, get_owned_job
 from app.services.plate_service import cleanup_old_plates, cleanup_unreadable_plates, deduplicate_plates_global, delete_plate, export_plates_csv, list_plates, plate_payload, plate_stats
 
 
@@ -41,7 +42,7 @@ def maybe_require_test_image_auth(request: Request, db: Session = Depends(get_db
     return user
 
 
-@router.get("", dependencies=[Depends(get_current_user)])
+@router.get("")
 def get_plates(
     source_type: str | None = None,
     camera_id: int | None = None,
@@ -54,6 +55,7 @@ def get_plates(
     date_to: datetime | None = None,
     min_confidence: float | None = Query(default=None, ge=0, le=1),
     db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
 ):
     rows = list_plates(
         db,
@@ -68,14 +70,15 @@ def get_plates(
             "date_from": date_from,
             "date_to": date_to,
             "min_confidence": min_confidence,
+            "owner_user": current_user,
         },
     )
     return ok([plate_payload(row) for row in rows])
 
 
-@router.get("/stats", dependencies=[Depends(get_current_user)])
-def get_plate_stats(db: Session = Depends(get_db)):
-    return ok(plate_stats(db))
+@router.get("/stats")
+def get_plate_stats(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    return ok(plate_stats(db, current_user))
 
 
 @router.post("/test-image")
@@ -92,27 +95,29 @@ async def test_plate_image(_: object = Depends(maybe_require_test_image_auth), f
     return ok(result)
 
 
-@router.get("/by-video/{analysis_job_id}", dependencies=[Depends(get_current_user)])
-def get_plates_by_video(analysis_job_id: int, db: Session = Depends(get_db)):
-    rows = list_plates(db, {"analysis_job_id": analysis_job_id, "source_type": "video"})
+@router.get("/by-video/{analysis_job_id}")
+def get_plates_by_video(analysis_job_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    get_owned_job(db, analysis_job_id, current_user)
+    rows = list_plates(db, {"analysis_job_id": analysis_job_id, "source_type": "video", "owner_user": current_user})
     return ok([plate_payload(row) for row in rows])
 
 
-@router.get("/by-camera/{camera_id}", dependencies=[Depends(get_current_user)])
-def get_plates_by_camera(camera_id: int, db: Session = Depends(get_db)):
-    rows = list_plates(db, {"camera_id": camera_id, "source_type": "camera"})
+@router.get("/by-camera/{camera_id}")
+def get_plates_by_camera(camera_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    get_owned_camera(db, camera_id, current_user)
+    rows = list_plates(db, {"camera_id": camera_id, "source_type": "camera", "owner_user": current_user})
     return ok([plate_payload(row) for row in rows])
 
 
-@router.get("/export/csv", dependencies=[Depends(get_current_user)])
-def export_csv(db: Session = Depends(get_db)):
-    rows = list_plates(db, {})
+@router.get("/export/csv")
+def export_csv(db: Session = Depends(get_db), current_user=Depends(get_current_user)):
+    rows = list_plates(db, {"owner_user": current_user})
     target = BASE_DIR / "exports" / f"plates_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv"
     export_plates_csv(db, rows, target)
     return FileResponse(path=target, media_type="text/csv", filename=Path(target).name)
 
 
-@router.post("/deduplicate", dependencies=[Depends(get_current_user)])
+@router.post("/deduplicate", dependencies=[Depends(require_admin)])
 def deduplicate_plates(db: Session = Depends(get_db)):
     deleted = deduplicate_plates_global(db)
     return ok({"deleted": deleted}, f"{deleted} yinelenen plaka kaydi temizlendi.")
@@ -131,18 +136,20 @@ def cleanup_unreadable(db: Session = Depends(get_db)):
     return ok({"deleted": deleted}, "Okunamayan plaka kayitlari temizlendi.")
 
 
-@router.get("/{plate_id}", dependencies=[Depends(get_current_user)])
-def get_plate(plate_id: int, db: Session = Depends(get_db)):
+@router.get("/{plate_id}")
+def get_plate(plate_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     record = db.get(LicensePlate, plate_id)
     if not record:
         raise HTTPException(status_code=404, detail="Plaka kaydi bulunamadi.")
+    ensure_owned_source(record, current_user, "Plaka kaydi bulunamadi.")
     return ok(plate_payload(record))
 
 
-@router.delete("/{plate_id}", dependencies=[Depends(get_current_user)])
-def remove_plate(plate_id: int, db: Session = Depends(get_db)):
+@router.delete("/{plate_id}")
+def remove_plate(plate_id: int, db: Session = Depends(get_db), current_user=Depends(get_current_user)):
     record = db.get(LicensePlate, plate_id)
     if not record:
         raise HTTPException(status_code=404, detail="Plaka kaydi bulunamadi.")
+    ensure_owned_source(record, current_user, "Plaka kaydi bulunamadi.")
     delete_plate(db, record)
     return ok(message="Plaka kaydi silindi.")

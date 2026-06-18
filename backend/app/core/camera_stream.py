@@ -54,6 +54,7 @@ from app.database import SessionLocal
 from app.models.camera import Camera
 from app.services.event_service import create_event
 from app.services.incident_service import IncidentTracker, incident_payload
+from app.services.person_registry import PersonRegistry
 from app.services.plate_service import plate_vote_buffer
 from app.services.vehicle_tracker import VehicleTracker, expand_bbox_crop
 from app.services.websocket_manager import manager
@@ -191,6 +192,164 @@ def _build_web_onnx_detector(annotate_source) -> "_OnnxWebDetector | None":
     if onnx_detector is None:
         return None
     return _OnnxWebDetector(onnx_detector, annotate_source)
+
+
+def _web_stream_tiled() -> bool:
+    return os.getenv("WEB_STREAM_TILED_DETECTION", "false").strip().lower() in ("1", "true", "yes", "on")
+
+
+def _nms_numpy(boxes: np.ndarray, scores: np.ndarray, iou_thr: float = 0.5) -> list[int]:
+    """Bagimsizlik icin saf-numpy NMS (parcalar arasi cakisan kutulari tekillestirir)."""
+    if len(boxes) == 0:
+        return []
+    x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
+    areas = (x2 - x1) * (y2 - y1)
+    order = scores.argsort()[::-1]
+    keep: list[int] = []
+    while order.size > 0:
+        i = order[0]
+        keep.append(int(i))
+        xx1 = np.maximum(x1[i], x1[order[1:]])
+        yy1 = np.maximum(y1[i], y1[order[1:]])
+        xx2 = np.minimum(x2[i], x2[order[1:]])
+        yy2 = np.minimum(y2[i], y2[order[1:]])
+        w = np.maximum(0.0, xx2 - xx1)
+        h = np.maximum(0.0, yy2 - yy1)
+        inter = w * h
+        iou = inter / (areas[i] + areas[order[1:]] - inter + 1e-6)
+        order = order[1:][iou <= iou_thr]
+    return keep
+
+
+class _TiledPoseDetector:
+    """Kareyi rows×cols parcaya bolup HER parcada ayri tespit yapar -> uzaktaki/kucuk
+    insanlar (tam karede kacarken) parca icinde gorece buyur ve YAKALANIR.
+
+    OOM olmamasi icin YENI MODEL YUKLEMEZ; paylasilan detektorun zaten yuklu YOLO
+    modelini predict ile kullanir. Parca tespitleri tam-kare koordinatina tasinir,
+    NMS ile tekillestirilir, kendi ByteTracker'iyla ID atanir. detect_and_track/annotate
+    arayuzu PersonDetector ile birebir aynidir.
+    """
+
+    def __init__(self, base_detector, rows: int = 2, cols: int = 2, overlap: float = 0.2) -> None:
+        self._base = base_detector
+        self._model = base_detector.model
+        self._device = base_detector.device
+        self._half = bool(getattr(base_detector, "half_enabled", False)) and base_detector.device != "cpu"
+        self._conf = float(os.getenv("WEB_STREAM_TILED_CONF", "0.15"))
+        self.rows, self.cols, self.overlap = rows, cols, overlap
+        # Uzak/minik insanlar dusuk-guvenli (0.15-0.25) tespit edilir; varsayilan ByteTrack
+        # esikleri (0.25) bunlari eler. Tiled icin DUSUK esikli tracker -> uzaklari da ID'ler.
+        from types import SimpleNamespace
+
+        from ultralytics.trackers.byte_tracker import BYTETracker
+
+        # ID kararliligi: track_buffer uzun (kisa kayipta ayni ID korunur) + match_thresh
+        # yuksek (yeniden yakalamada mevcut track'e baglanir, yeni ID acmaz).
+        self._tracker = BYTETracker(SimpleNamespace(
+            track_high_thresh=0.12,
+            track_low_thresh=0.05,
+            new_track_thresh=0.20,
+            track_buffer=150,
+            match_thresh=0.92,
+            fuse_score=True,
+        ))
+        self.available = bool(base_detector.available)
+        self.model_name = f"{base_detector.model_name} (tiled {rows}x{cols})"
+        self.last_inference_ms = 0.0
+
+    @property
+    def device_label(self) -> str:
+        return self._base.device_label
+
+    def detect_and_track(self, frame, input_size=None):
+        import time as _t
+
+        sz = int(input_size or 640)
+        h, w = frame.shape[:2]
+        th, tw = h // self.rows, w // self.cols
+        oy, ox = int(self.overlap * th), int(self.overlap * tw)
+        all_xyxy: list = []
+        all_conf: list = []
+        all_kpts: list = []
+        t0 = _t.perf_counter()
+        for ri in range(self.rows):
+            for ci in range(self.cols):
+                y1 = max(0, ri * th - oy)
+                y2 = min(h, (ri + 1) * th + oy)
+                x1 = max(0, ci * tw - ox)
+                x2 = min(w, (ci + 1) * tw + ox)
+                tile = frame[y1:y2, x1:x2]
+                if tile.size == 0:
+                    continue
+                try:
+                    r = self._model.predict(
+                        tile, imgsz=sz, conf=self._conf, classes=[0],
+                        device=self._device, half=self._half, verbose=False,
+                    )[0]
+                except Exception:
+                    continue
+                if r.boxes is None or len(r.boxes) == 0:
+                    continue
+                xyxy = r.boxes.xyxy.cpu().numpy()
+                conf = r.boxes.conf.cpu().numpy()
+                kxy = r.keypoints.xy.cpu().numpy() if (getattr(r, "keypoints", None) is not None and r.keypoints.xy is not None) else None
+                kcf = r.keypoints.conf.cpu().numpy() if (getattr(r, "keypoints", None) is not None and r.keypoints.conf is not None) else None
+                for j in range(len(xyxy)):
+                    bx = xyxy[j].astype(np.float32).copy()
+                    bx[0] += x1; bx[1] += y1; bx[2] += x1; bx[3] += y1
+                    all_xyxy.append(bx)
+                    all_conf.append(float(conf[j]))
+                    if kxy is not None:
+                        kk = kxy[j].astype(np.float32).copy()
+                        kk[:, 0] += x1; kk[:, 1] += y1
+                        cc = kcf[j] if kcf is not None else np.ones(len(kk), dtype=np.float32)
+                        all_kpts.append((kk, cc))
+                    else:
+                        all_kpts.append(None)
+        self.last_inference_ms = (_t.perf_counter() - t0) * 1000
+        if not all_xyxy:
+            return []
+        boxes = np.array(all_xyxy, dtype=np.float32)
+        scores = np.array(all_conf, dtype=np.float32)
+        # IoU 0.4: parca sinirindaki ayni kisinin 2 kopyasini daha agresif birlestir.
+        keep = _nms_numpy(boxes, scores, 0.4)
+        mxyxy = boxes[keep]
+        mconf = scores[keep]
+        cxcywh = np.empty_like(mxyxy)
+        cxcywh[:, 0] = (mxyxy[:, 0] + mxyxy[:, 2]) / 2.0
+        cxcywh[:, 1] = (mxyxy[:, 1] + mxyxy[:, 3]) / 2.0
+        cxcywh[:, 2] = mxyxy[:, 2] - mxyxy[:, 0]
+        cxcywh[:, 3] = mxyxy[:, 3] - mxyxy[:, 1]
+        mcls = np.zeros(len(keep), dtype=np.float32)
+        try:
+            tracks = self._tracker.update(_ByteTrackInput(cxcywh, mconf, mcls), frame)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Tiled ByteTrack update hatasi: %s", exc)
+            return []
+        detections: list[dict] = []
+        if tracks is None or len(tracks) == 0:
+            return detections
+        for row in tracks:
+            d = {
+                "track_id": int(row[4]),
+                "bbox": [int(row[0]), int(row[1]), int(row[2]), int(row[3])],
+                "confidence": float(row[5]),
+            }
+            di = int(row[7])
+            if 0 <= di < len(keep):
+                kp = all_kpts[keep[di]]
+                if kp is not None:
+                    kk, cc = kp
+                    d["keypoints"] = [
+                        {"x": float(p[0]), "y": float(p[1]), "confidence": float(c)}
+                        for p, c in zip(kk, cc)
+                    ]
+            detections.append(d)
+        return detections
+
+    def annotate(self, *args, **kwargs):
+        return self._base.annotate(*args, **kwargs)
 
 
 class _FrameReader:
@@ -351,7 +510,7 @@ class CameraStreamWorker:
             t0 = time.monotonic()
             frame = reader.get_latest()  # thread-safe latest-frame handoff (deque maxlen=1)
             if frame is not None:
-                ok, enc = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                ok, enc = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 90])
                 if ok:
                     self.latest_jpeg = enc.tobytes()
             elapsed = time.monotonic() - t0
@@ -384,12 +543,43 @@ class CameraStreamWorker:
                         return None
         self._is_first_open = False
 
-        cap = cv2.VideoCapture(source)
+        cap = self._make_capture(source)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
         if not cap.isOpened():
             cap.release()
             return None
         return cap
+
+    @staticmethod
+    def _make_capture(source) -> cv2.VideoCapture:
+        """VideoCapture'i kaynak turune gore acar.
+
+        - Webcam (int / sayisal) -> varsayilan backend (degismez).
+        - Ag akisi (http/https/m3u8, ozellikle YouTube HLS) -> FFmpeg + otomatik
+          yeniden baglanma; segment takilmalarinda goruntu donmasini azaltir.
+        - RTSP -> FFmpeg + TCP tasima (UDP paket kaybindan kaynakli kasma/donma azalir).
+        Webcam/RTSP davranisi yalnizca daha kararli hale gelir; analiz sikligi DEGISMEZ.
+        """
+        if isinstance(source, int) or (isinstance(source, str) and source.isdigit()):
+            return cv2.VideoCapture(int(source))
+        if isinstance(source, str):
+            low = source.lower()
+            if low.startswith("rtsp://"):
+                ff_opts = "rtsp_transport;tcp|max_delay;500000|stimeout;5000000"
+            else:
+                # http/https/m3u8 (YouTube canli HLS dahil): kopuklukte yeniden baglan.
+                ff_opts = "reconnect;1|reconnect_streamed;1|reconnect_delay_max;2"
+            prev = os.environ.get("OPENCV_FFMPEG_CAPTURE_OPTIONS")
+            os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = ff_opts
+            try:
+                return cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+            finally:
+                # Secenekleri sadece bu acilis icin uygula; diger yollari (VOD vb.) etkileme.
+                if prev is None:
+                    os.environ.pop("OPENCV_FFMPEG_CAPTURE_OPTIONS", None)
+                else:
+                    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = prev
+        return cv2.VideoCapture(source)
 
     def _run(self) -> None:
         detector = get_detector()
@@ -424,6 +614,29 @@ class CameraStreamWorker:
                     "Web stream camera_id=%s ONNX pose yuklenemedi, PyTorch'a donuluyor",
                     self.camera_id,
                 )
+        elif is_web_stream and _web_stream_tiled():
+            # TILED: uzak/genis cam'lerde minik insanlari yakalamak icin kareyi parcalara
+            # bolup her parcada tespit yapar. YENI MODEL YUKLEMEZ (paylasilan modeli predict
+            # ile kullanir -> OOM yok). Olcumde tam-kare 1 kisi iken 2x2 parca 5 kisi yakaladi.
+            try:
+                tiled = _TiledPoseDetector(detector)
+                if tiled.available:
+                    detector = tiled
+                    logger.warning(
+                        "Web stream camera_id=%s TILED pose detektoru aktif (%s)",
+                        self.camera_id, tiled.model_name,
+                    )
+            except Exception as exc:
+                logger.warning("Web stream camera_id=%s tiled detektor olusturulamadi: %s", self.camera_id, exc)
+        elif is_web_stream:
+            # Web yayini PAYLASILAN PyTorch pose detektorunu (get_detector singleton) kullanir.
+            # Neden ayri (dedicated) model DEGIL: auto-start kapali + ayni anda tek yayin
+            # izlendigi icin tracker durumu cakismasi pratikte olmaz; ayrica 2. yolov8s
+            # modelini @640 yuklemek 6GB GPU'da OOM/native cokme yapiyordu. Tek model = stabil.
+            logger.warning(
+                "Web stream camera_id=%s paylasilan PyTorch pose detektoru kullaniyor (%s)",
+                self.camera_id, detector.device_label,
+            )
         plate_pipeline = get_plate_pipeline() if plate_enabled else None
         vehicle_tracker = VehicleTracker() if plate_pipeline else None
         if plate_pipeline:
@@ -438,6 +651,8 @@ class CameraStreamWorker:
                 bool(plate_pipeline.ocr and plate_pipeline.ocr.available),
             )
         incident_tracker = IncidentTracker(db, "camera", camera_id=self.camera_id, fps=25.0)
+        # Kisi Takibi kayit defteri (per-ID crop + 60sn TTL + anomalide DB'ye yukseltme)
+        person_registry = PersonRegistry(self.camera_id, camera_name)
         frame_index = 0
         last_event_by_pair: dict[tuple, int] = {}
         cap = None
@@ -578,6 +793,21 @@ class CameraStreamWorker:
                     if incident:
                         _broadcast_bg(manager.broadcast(f"live:{self.camera_id}", {"type": "incident", **incident_payload(incident)}))
 
+                    # ── Kisi Takibi: per-ID crop yakala + anomalide DB'ye yukselt + canli yayinla ──
+                    # Tamamen savunmaci: hata olsa bile analiz/akis dongusunu ASLA bozmaz.
+                    try:
+                        person_registry.update(frame, detections)
+                        if level != "NORMAL":
+                            _flag_ids = involved_ids if involved_ids else set(score_info.get("pair") or [])
+                            person_registry.flag_and_persist(_flag_ids, level, smoothed, SessionLocal)
+                        _broadcast_bg(manager.broadcast(
+                            f"live:{self.camera_id}",
+                            {"type": "persons_update", "camera_id": self.camera_id,
+                             "persons": person_registry.live_payload()},
+                        ))
+                    except Exception:
+                        pass
+
                     self._last_score = round(smoothed, 1)
                     self._last_level = level
                     if is_web_stream:
@@ -685,6 +915,10 @@ class CameraStreamWorker:
                         )
         finally:
             self.running = False  # mark dead so is_running() returns False
+            try:
+                person_registry.stop()  # flag'lenmemis gecici crop'lari sil
+            except Exception:
+                pass
             if reader is not None:
                 reader.stop()
             if cap is not None:

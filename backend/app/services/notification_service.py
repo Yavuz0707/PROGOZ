@@ -63,7 +63,7 @@ class NotificationService:
     ) -> None:
         if not self.enabled:
             return
-        min_score = float(os.getenv("FIGHT_ALERT_MIN_SCORE", "60"))
+        min_score = float(os.getenv("FIGHT_ALERT_MIN_SCORE", "75"))
         if score < min_score:
             return
         if not self._check_cooldown(f"{source_id}_{level}", cooldown_seconds):
@@ -71,8 +71,8 @@ class NotificationService:
         try:
             message = _fb_messaging.Message(
                 notification=_fb_messaging.Notification(
-                    title=f"⚠️ {level} Tespit Edildi!",
-                    body=f"{camera_name} | Skor: {score:.0f} | {timestamp}",
+                    title="🚨 Şüpheli Hareket Tespit Edildi",
+                    body=f"{camera_name} kamerasında şüpheli hareket!",
                 ),
                 data={
                     "type": "fight_alert",
@@ -163,8 +163,9 @@ router = APIRouter(
 
 @router.post("/subscribe")
 def subscribe_fcm(
-    user_id: str = Body(..., embed=True),
+    user_id: str | None = Body(default=None, embed=True),
     fcm_token: str = Body(..., embed=True),
+    current_user=Depends(get_current_user),
 ):
-    result = notification_service.subscribe_user(user_id, fcm_token)
+    result = notification_service.subscribe_user(str(current_user.id), fcm_token)
     return ok(result, "FCM abonelik islendi.")

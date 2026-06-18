@@ -1,4 +1,5 @@
 import logging
+import os
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -6,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.api import auth_routes, camera_routes, event_routes, incident_routes, plate_routes, stream_routes, system_routes, upload_routes
+from app.api import auth_routes, camera_routes, event_routes, incident_routes, plate_routes, stream_routes, system_routes, tracked_person_routes, upload_routes
 import app.services.notification_service as _notification_module
 from app.config import get_settings
 from app.database import init_db
@@ -35,7 +36,16 @@ app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
 
 
 def _auto_start_cameras() -> None:
-    """Background thread: start all enabled cameras after the server is ready."""
+    """Background thread: start all enabled cameras after the server is ready.
+
+    VARSAYILAN OLARAK KAPALI. Frontend zaten kamerayi acinca /start, kapayinca
+    /stop cagiriyor; acilista hepsini birden baslatmak (webcam + tum web yayinlari)
+    tek GPU'da es zamanli analiz yuku olusturup FPS'i dusuruyordu (donma/kasma).
+    Artik yalnizca aktif izlenen yayin calisir. 7/24 tum kameralari analiz etmek
+    istersen AUTO_START_CAMERAS=true yap (guclu/coklu GPU gerekir)."""
+    if os.getenv("AUTO_START_CAMERAS", "false").strip().lower() not in ("1", "true", "yes", "on"):
+        logger.warning("Auto-start kapali (AUTO_START_CAMERAS!=true) — kameralar yalniz izlenince baslar.")
+        return
     import time as _time
     _time.sleep(3)  # Wait for server to fully initialize
 
@@ -147,5 +157,6 @@ app.include_router(event_routes.router, prefix=settings.api_prefix)
 app.include_router(incident_routes.router, prefix=settings.api_prefix)
 app.include_router(plate_routes.router, prefix=settings.api_prefix)
 app.include_router(system_routes.router, prefix=settings.api_prefix)
+app.include_router(tracked_person_routes.router, prefix=settings.api_prefix)
 app.include_router(_notification_module.router, prefix=settings.api_prefix)
 app.include_router(stream_routes.router)

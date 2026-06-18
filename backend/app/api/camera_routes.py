@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.camera import Camera
 from app.models.incident import Incident
+from app.models.user import User
 from app.schemas.camera_schema import CameraCreate, CameraRead, CameraUpdate
 from app.schemas.common import ok
 from app.services.auth_service import get_current_user
@@ -15,15 +16,30 @@ from app.services.incident_service import incident_payload
 router = APIRouter(prefix="/cameras", tags=["cameras"], dependencies=[Depends(get_current_user)])
 
 
+def _owned_camera(camera_id: int, db: Session, user: User) -> Camera:
+    """Kamerayi getir + sahiplik kontrolu. Admin tum kameralara erisir; diger
+    kullanicilar yalnizca KENDI ekledikleri kameralara erisir. Sahip degilse 404
+    (varligi sizdirmamak icin 'bulunamadi')."""
+    camera = db.get(Camera, camera_id)
+    if not camera:
+        raise HTTPException(status_code=404, detail="Kamera bulunamadi.")
+    if user.role != "admin" and camera.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Kamera bulunamadi.")
+    return camera
+
+
 @router.get("")
-def list_cameras(db: Session = Depends(get_db)):
-    cameras = db.query(Camera).order_by(Camera.created_at.desc()).all()
+def list_cameras(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    query = db.query(Camera)
+    if current_user.role != "admin":
+        query = query.filter(Camera.user_id == current_user.id)
+    cameras = query.order_by(Camera.created_at.desc()).all()
     return ok([CameraRead.model_validate(c).model_dump(mode="json") for c in cameras])
 
 
 @router.post("")
-def create_camera(payload: CameraCreate, db: Session = Depends(get_db)):
-    camera = Camera(**payload.model_dump())
+def create_camera(payload: CameraCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    camera = Camera(**payload.model_dump(), user_id=current_user.id)
     db.add(camera)
     db.commit()
     db.refresh(camera)
@@ -59,18 +75,14 @@ def stop_webcam(device_id: int = Body(..., embed=True)):
 
 
 @router.get("/{camera_id}")
-def get_camera(camera_id: int, db: Session = Depends(get_db)):
-    camera = db.get(Camera, camera_id)
-    if not camera:
-        raise HTTPException(status_code=404, detail="Kamera bulunamadi.")
+def get_camera(camera_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    camera = _owned_camera(camera_id, db, current_user)
     return ok(CameraRead.model_validate(camera).model_dump(mode="json"))
 
 
 @router.put("/{camera_id}")
-def update_camera(camera_id: int, payload: CameraUpdate, db: Session = Depends(get_db)):
-    camera = db.get(Camera, camera_id)
-    if not camera:
-        raise HTTPException(status_code=404, detail="Kamera bulunamadi.")
+def update_camera(camera_id: int, payload: CameraUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    camera = _owned_camera(camera_id, db, current_user)
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(camera, key, value)
     db.commit()
@@ -79,10 +91,8 @@ def update_camera(camera_id: int, payload: CameraUpdate, db: Session = Depends(g
 
 
 @router.delete("/{camera_id}")
-def delete_camera(camera_id: int, db: Session = Depends(get_db)):
-    camera = db.get(Camera, camera_id)
-    if not camera:
-        raise HTTPException(status_code=404, detail="Kamera bulunamadi.")
+def delete_camera(camera_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    camera = _owned_camera(camera_id, db, current_user)
     camera_runtime.stop(camera_id)
     db.delete(camera)
     db.commit()
@@ -90,10 +100,8 @@ def delete_camera(camera_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{camera_id}/start")
-def start_camera(camera_id: int, db: Session = Depends(get_db)):
-    camera = db.get(Camera, camera_id)
-    if not camera:
-        raise HTTPException(status_code=404, detail="Kamera bulunamadi.")
+def start_camera(camera_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    camera = _owned_camera(camera_id, db, current_user)
     if camera.source_type == "webcam":
         source: str | int = 0
     elif camera.source_type == "web":
@@ -113,12 +121,14 @@ def start_camera(camera_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{camera_id}/stop")
-def stop_camera(camera_id: int):
+def stop_camera(camera_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _owned_camera(camera_id, db, current_user)
     camera_runtime.stop(camera_id)
     return ok({"running": False}, "Kamera analizi durduruldu.")
 
 
 @router.get("/{camera_id}/incidents")
-def camera_incidents(camera_id: int, db: Session = Depends(get_db)):
+def camera_incidents(camera_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    _owned_camera(camera_id, db, current_user)
     incidents = db.query(Incident).filter(Incident.camera_id == camera_id).order_by(Incident.created_at.desc()).all()
     return ok([incident_payload(item) for item in incidents])

@@ -16,11 +16,13 @@ class AuthService {
 
   Future<Map<String, dynamic>> login(String username, String password) async {
     final apiUrl = await _apiUrl();
-    final response = await http.post(
-      Uri.parse('$apiUrl/auth/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'username': username, 'password': password}),
-    );
+    final response = await http
+        .post(
+          Uri.parse('$apiUrl/auth/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'username': username, 'password': password}),
+        )
+        .timeout(const Duration(seconds: 8));
 
     if (response.statusCode == 200) {
       final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -35,11 +37,14 @@ class AuthService {
       String message;
       try {
         final error = jsonDecode(response.body) as Map<String, dynamic>;
-        message = error['detail']?.toString() ??
+        message =
+            error['detail']?.toString() ??
             error['message']?.toString() ??
             response.body;
       } catch (_) {
-        message = response.body.isNotEmpty ? response.body : 'Giriş başarısız (${response.statusCode})';
+        message = response.body.isNotEmpty
+            ? response.body
+            : 'Giriş başarısız (${response.statusCode})';
       }
       throw Exception(message);
     }

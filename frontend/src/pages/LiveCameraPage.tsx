@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Bell, BellOff, Play, Square } from "lucide-react";
-import { api, unwrap } from "../api/client";
+import { api, streamUrl, unwrap } from "../api/client";
 import { SeverityBadge } from "../components/SeverityBadge";
 import { useWebSocket } from "../hooks/useWebSocket";
 import type { Camera } from "../types";
@@ -108,7 +108,7 @@ export default function LiveCameraPage() {
       </div>
       <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
         <div className="panel aspect-video overflow-hidden bg-black">
-          {cameraId !== null ? <img className="h-full w-full object-contain" src={`/api/stream/${cameraId}/mjpeg`} /> : <div className="grid h-full place-items-center text-slate-400">Kamera secin</div>}
+          {cameraId !== null ? <img className="h-full w-full object-contain" src={streamUrl(cameraId)} /> : <div className="grid h-full place-items-center text-slate-400">Kamera secin</div>}
         </div>
         <div className={`panel p-4 ${level === "KAVGA" ? "border-red-400/70" : ""}`}>
           {plateToast && <div className="mb-4 rounded-lg border border-cyan-400/40 bg-cyan-400/10 p-3 text-sm text-cyan-100">Plaka: <strong>{plateToast.plate}</strong> {Math.round(Number(plateToast.confidence || 0) * 100)}%</div>}
