@@ -95,7 +95,7 @@ fiziksel çatışmadan ayırt edebilir.
 
 ## 🖥️ Ekran Görüntüleri — Web Paneli
 
-> iOS esinli, tamamen **siyah / beyaz / gri monokrom** arayüz. Renkler yalnızca anlam taşır:
+> Renkler yalnızca anlam taşır:
 > 🟢 çevrimiçi/sağlıklı · 🔴 kavga/tehlike · 🟠 uyarı/şüpheli.
 
 ### Giriş Akışı
