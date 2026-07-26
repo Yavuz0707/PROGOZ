@@ -2,7 +2,7 @@
 
 # 🛡️ PROGÖZ
 
-### Proaktif Yapay Zekâ Destekli Gözetim Sistemi
+### Proaktif Yapay Zekâ Destekli Gözetim Sistemi.
 
 **Kayıt almakla yetinmeyen; izleyen, anlayan ve uyaran güvenlik platformu.**
 
