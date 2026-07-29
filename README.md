@@ -8,7 +8,7 @@
 
 PROGÖZ; güvenlik kameralarından, web yayınlarından veya yüklenen videolardan gelen görüntülerde
 **kavga, fiziksel saldırı, yakın temaslı şiddet ve anomali** sinyallerini gerçek zamanlı tespit eder,
-olayları gruplar, araç **plakalarını okur** ve bunları sade bir panel ile mobil uygulamada sunar.
+olayları gruplar, araç **plakalarını okur** ve bunları sade bir panel ile mobil uygulamada sunar..
 
 <br/>
 
